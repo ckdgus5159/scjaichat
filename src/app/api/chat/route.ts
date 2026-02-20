@@ -11,6 +11,7 @@ const PostSchema = z.object({
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
+
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -33,7 +34,7 @@ async function generateWithRetry(
   opts?: { attempts?: number; timeoutMs?: number }
 ) {
   const attempts = opts?.attempts ?? 3;
-  const timeoutMs = opts?.timeoutMs ?? 12000; // 12초 안에 안 오면 끊고 재시도
+  const timeoutMs = opts?.timeoutMs ?? 12_000;
 
   let lastErr: any;
 
@@ -55,7 +56,6 @@ async function generateWithRetry(
   }
   throw lastErr;
 }
-
 
 /** ===== GM 출력 품질: 예시(명령) 검증/수정 ===== */
 
@@ -139,45 +139,6 @@ function clipConversation(conv: string, maxLen = 5000) {
   return t.slice(t.length - maxLen);
 }
 
-/**
- * 예시가 반응형/게이트형이면 1회 재생성 요청.
- * (속도 때문에: "정말 필요할 때만" 1회)
- */
-async function ensureGoodExamplesOrRegenOnce(args: {
-  ai: ReturnType<typeof getGeminiClient>;
-  system: string;
-  conversation: string;
-  userText: string;
-  draft: string;
-}) {
-  const { ai, system, conversation, userText, draft } = args;
-
-  const clipped = clipText(draft);
-
-  // 1) 형식이 깨졌으면 재생성 후보
-  if (!gmHasFourBlocks(clipped)) {
-    return await regenOnce({ ai, system, conversation, userText, reason: "format", fallback: clipped });
-  }
-
-  // 2) 예시 블록 추출
-  const ex = extractExamplesBlock(clipped);
-  if (!ex.raw) {
-    return await regenOnce({ ai, system, conversation, userText, reason: "no_examples", fallback: clipped });
-  }
-
-  // 3) 예시가 정확히 3개인지
-  const exampleLines = ex.lines.filter((l) => EXAMPLE_LINE_RE.test(l)).slice(0, 3);
-  if (exampleLines.length !== 3 || countExamples(ex.lines) !== 3) {
-    return await regenOnce({ ai, system, conversation, userText, reason: "count", fallback: clipped });
-  }
-
-  // 4) 반응형/대상부족 탐지 (여기서만 재생성)
-  const bad = exampleLines.some((l) => isReactionishExample(l) || lacksActionTarget(l));
-  if (!bad) return clipped;
-
-  return await regenOnce({ ai, system, conversation, userText, reason: "quality", fallback: clipped });
-}
-
 async function regenOnce(args: {
   ai: ReturnType<typeof getGeminiClient>;
   system: string;
@@ -204,27 +165,31 @@ async function regenOnce(args: {
 ${userText}
   `.trim();
 
-  const resp2 = await generateWithRetry(ai, {
-    model: GEMINI_MODEL,
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            text:
-              system +
-              "\n\n[대화 기록]\n" +
-              conversation +
-              "\n\n[이번 턴 플레이어 명령]\n" +
-              userText +
-              "\n\n[추가 지시]\n" +
-              regenInstruction +
-              "\n\nGM:",
-          },
-        ],
-      },
-    ],
-  }, {attempts: 2, timeoutMs: 12000 });
+  const resp2 = await generateWithRetry(
+    ai,
+    {
+      model: GEMINI_MODEL,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text:
+                system +
+                "\n\n[대화 기록]\n" +
+                conversation +
+                "\n\n[이번 턴 플레이어 명령]\n" +
+                userText +
+                "\n\n[추가 지시]\n" +
+                regenInstruction +
+                "\n\nGM:",
+            },
+          ],
+        },
+      ],
+    },
+    { attempts: 2, timeoutMs: 20_000 } // ✅ regen도 너무 짧으면 또 timeout 나서 여기서도 500 터짐
+  );
 
   const regenerated = clipText((resp2.text ?? "").trim());
   return regenerated || fallback;
@@ -333,64 +298,72 @@ export async function GET(req: Request) {
 
 /** ========== POST ========== */
 export async function POST(req: Request) {
-  const auth = req.headers.get("authorization") || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : undefined;
-  if (!token) return new NextResponse("Missing Authorization", { status: 401 });
+  try {
+    const auth = req.headers.get("authorization") || "";
+    const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : undefined;
+    if (!token) return new NextResponse("Missing Authorization", { status: 401 });
 
-  const supabase = supabaseServerWithAnon(token);
+    const supabase = supabaseServerWithAnon(token);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (!user) return new NextResponse("Invalid user", { status: 401 });
+    if (!user) return new NextResponse("Invalid user", { status: 401 });
 
-  const body = PostSchema.parse(await req.json());
-  const { gameId, userText } = body;
+    const body = PostSchema.parse(await req.json());
+    const { gameId, userText } = body;
 
-  const { data: game, error: gameErr } = await supabase
-    .from("games")
-    .select("id,user_id,happiness,status,values_profile,protagonist")
-    .eq("id", gameId)
-    .eq("user_id", user.id)
-    .single();
+    // ✅ 값 전달 정상 여부를 로그로 확정(문제 재현 시 확인용)
+    console.log("[/api/chat POST]", { gameId, userTextLen: userText?.length, model: GEMINI_MODEL });
 
-  if (gameErr) return new NextResponse(gameErr.message, { status: 400 });
+    const { data: game, error: gameErr } = await supabase
+      .from("games")
+      .select("id,user_id,happiness,status,values_profile,protagonist")
+      .eq("id", gameId)
+      .eq("user_id", user.id)
+      .single();
 
-  if (game.status === "finished") {
-    return NextResponse.json({
-      assistantText:
-        "결과: 이미 이야기는 마무리됐다.\n상태변화: 행복 +0\n다음상황: 엔딩 크레딧 뒤, 조용한 월요일 아침이 시작된다.\n가능한 명령 예시: (1) 다시 시작한다 (2) 기록을 읽는다 (3) 조용히 창밖을 본다",
-      happiness: game.happiness,
-      happinessDelta: 0,
-      status: game.status,
+    if (gameErr) return new NextResponse(gameErr.message, { status: 400 });
+
+    if (game.status === "finished") {
+      return NextResponse.json({
+        assistantText:
+          "결과: 이미 이야기는 마무리됐다.\n상태변화: 행복 +0\n다음상황: 엔딩 크레딧 뒤, 조용한 월요일 아침이 시작된다.\n가능한 명령 예시: (1) 다시 시작한다 (2) 기록을 읽는다 (3) 조용히 창밖을 본다",
+        happiness: game.happiness,
+        happinessDelta: 0,
+        status: game.status,
+      });
+    }
+
+    // Save user message
+    const { error: insUserErr } = await supabase.from("messages").insert({
+      game_id: gameId,
+      user_id: user.id,
+      role: "user",
+      content: userText,
+      happiness_delta: 0,
+      meta: {},
     });
-  }
+    if (insUserErr) return new NextResponse(insUserErr.message, { status: 400 });
 
-  // Save user message
-  const { error: insUserErr } = await supabase.from("messages").insert({
-    game_id: gameId,
-    user_id: user.id,
-    role: "user",
-    content: userText,
-    happiness_delta: 0,
-    meta: {},
-  });
-  if (insUserErr) return new NextResponse(insUserErr.message, { status: 400 });
+    // ✅ (3) 최근 10개 히스토리: desc로 가져오고 reverse로 원래 순서 복구
+    const { data: historyDesc, error: histErr } = await supabase
+      .from("messages")
+      .select("role,content,created_at")
+      .eq("game_id", gameId)
+      .order("created_at", { ascending: false })
+      .limit(10);
 
-  // ✅ (1) Pull recent context: 24 -> 16 (속도 개선)
-  const { data: history } = await supabase
-    .from("messages")
-    .select("role,content")
-    .eq("game_id", gameId)
-    .order("created_at", { ascending: true })
-    .limit(10);
+    if (histErr) return new NextResponse(histErr.message, { status: 400 });
 
-  const valuesProfile = game.values_profile as any;
-  const valuesProfileText = clipText(JSON.stringify(valuesProfile), 800);
-  const protagonist = game.protagonist as any;
+    const history = (historyDesc ?? []).reverse();
 
-  const system = `
+    const valuesProfile = game.values_profile as any;
+    const valuesProfileText = clipText(JSON.stringify(valuesProfile ?? {}), 800);
+    const protagonist = game.protagonist as any;
+
+    const system = `
 너는 "현실 직장/연애 드라마" 텍스트 어드벤처의 진행자(GM)다.
 유저는 주인공에게 조언하는 사람이 아니라, 주인공을 직접 조종하는 플레이어다.
 유저 입력은 "명령"이다.
@@ -406,8 +379,8 @@ export async function POST(req: Request) {
 - 성격 톤: ${protagonist?.tone ?? "warm"}
 - 한 줄: ${protagonist?.oneLine ?? ""}
 
-[가치관(행복관) 프로필]
-${JSON.stringify(valuesProfileText, null, 2)}
+[가치관(행복관) 프로필(요약)]
+${valuesProfileText}
 
 [진행 규칙]
 1) 매 턴 너는 반드시 아래 4개 블록을 "정확히" 출력한다. 다른 문장/해설/규칙 설명을 추가하지 마라.
@@ -428,73 +401,96 @@ ${JSON.stringify(valuesProfileText, null, 2)}
 - 폭력/범죄 조장, 노골적 성적 묘사, 자해 유도 금지.
   `.trim();
 
-  const conversationRaw = (history ?? [])
-    .filter((m) => m.role === "user" || m.role === "assistant")
-    .map((m) => `${m.role === "user" ? "플레이어(명령)" : "GM"}: ${m.content}`)
-    .join("\n");
+    const conversationRaw = (history ?? [])
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => `${m.role === "user" ? "플레이어(명령)" : "GM"}: ${m.content}`)
+      .join("\n");
 
-  // ✅ (2) conversation clip: 최근 2500자만 전달 (속도 개선)
-  const conversation = clipConversation(conversationRaw, 2500);
+    const conversation = clipConversation(conversationRaw, 2500);
 
-  const delta = estimateHappinessDelta(userText, valuesProfile);
+    const delta = estimateHappinessDelta(userText, valuesProfile);
 
-  const ai = getGeminiClient();
-  const reqArgs = {
-    model: GEMINI_MODEL,
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            text:
-              system +
-              "\n\n[대화 기록]\n" +
-              conversation +
-              "\n\n[이번 턴 플레이어 명령]\n" +
-              userText +
-              "\n\nGM:",
-          },
-        ],
-      },
-    ],
-  };
-  const resp = await generateWithRetry(ai, reqArgs, { attempts: 3, timeoutMs: 12000 });
-  const draft = (resp.text ?? "").trim();
+    const ai = getGeminiClient();
 
-  // ✅ (4) format이 깨졌을때만 재생성
-  let assistantText = clipText(draft);
-  if (!gmHasFourBlocks(assistantText)) {
-    assistantText = await regenOnce({ ai, system, conversation, userText, reason: "format", fallback: assistantText });
+    const reqArgs = {
+      model: GEMINI_MODEL,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text:
+                system +
+                "\n\n[대화 기록]\n" +
+                conversation +
+                "\n\n[이번 턴 플레이어 명령]\n" +
+                userText +
+                "\n\nGM:",
+            },
+          ],
+        },
+      ],
+    };
+
+    // ✅ (2) timeout 20초 / attempts 2 (성공률↑, 불필요한 장기 retry↓)
+    const resp = await generateWithRetry(ai, reqArgs, { attempts: 2, timeoutMs: 20_000 });
+    const draft = (resp.text ?? "").trim();
+
+    // ✅ 형식이 깨졌을 때만 1회 재생성 (너 기존 정책 유지)
+    let assistantText = clipText(draft);
+    if (assistantText && !gmHasFourBlocks(assistantText)) {
+      assistantText = await regenOnce({
+        ai,
+        system,
+        conversation,
+        userText,
+        reason: "format",
+        fallback: assistantText,
+      });
+    }
+
+    const newHappiness = clamp((game.happiness ?? 0) + delta, 0, 100);
+    const newStatus = newHappiness >= 100 ? "finished" : "active";
+
+    // Save assistant message
+    const { error: insAIErr } = await supabase.from("messages").insert({
+      game_id: gameId,
+      user_id: user.id,
+      role: "assistant",
+      content: assistantText,
+      happiness_delta: delta,
+      meta: { model: GEMINI_MODEL, mode: "gm" },
+    });
+    if (insAIErr) return new NextResponse(insAIErr.message, { status: 400 });
+
+    // Update game
+    const { error: upErr } = await supabase
+      .from("games")
+      .update({ happiness: newHappiness, status: newStatus })
+      .eq("id", gameId)
+      .eq("user_id", user.id);
+
+    if (upErr) return new NextResponse(upErr.message, { status: 400 });
+
+    return NextResponse.json({
+      assistantText,
+      happiness: newHappiness,
+      happinessDelta: delta,
+      status: newStatus,
+    });
+  } catch (e: any) {
+    const status = e?.status ?? e?.cause?.status ?? e?.response?.status;
+
+    // ✅ (1) timeout/혼잡/레이트는 503으로 정규화해서 프론트가 "잠시 후 재시도" UX를 타게 함
+    if (status === 503 || status === 429 || e?.message === "gemini_timeout") {
+      console.error("[/api/chat POST] gemini unavailable", {
+        status,
+        message: e?.message,
+      });
+      return new NextResponse("Model overloaded. Please retry.", { status: 503 });
+    }
+
+    console.error("[/api/chat POST] unhandled error", e);
+    return new NextResponse("Internal error", { status: 500 });
   }
-
-
-  const newHappiness = clamp((game.happiness ?? 0) + delta, 0, 100);
-  const newStatus = newHappiness >= 100 ? "finished" : "active";
-
-  // Save assistant message
-  const { error: insAIErr } = await supabase.from("messages").insert({
-    game_id: gameId,
-    user_id: user.id,
-    role: "assistant",
-    content: assistantText,
-    happiness_delta: delta,
-    meta: { model: GEMINI_MODEL, mode: "gm" },
-  });
-  if (insAIErr) return new NextResponse(insAIErr.message, { status: 400 });
-
-  // Update game
-  const { error: upErr } = await supabase
-    .from("games")
-    .update({ happiness: newHappiness, status: newStatus })
-    .eq("id", gameId)
-    .eq("user_id", user.id);
-
-  if (upErr) return new NextResponse(upErr.message, { status: 400 });
-
-  return NextResponse.json({
-    assistantText,
-    happiness: newHappiness,
-    happinessDelta: delta,
-    status: newStatus,
-  });
 }
