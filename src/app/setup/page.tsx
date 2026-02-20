@@ -18,6 +18,7 @@ export default function SetupPage() {
   const q = QUESTIONS[step];
   const answers = useMemo(() => Object.values(picked), [picked]);
   const done = answers.length === QUESTIONS.length;
+  const isLast = step === QUESTIONS.length - 1;
 
   // handle/pin 가드: 없으면 홈으로 돌려보냄
   useEffect(() => {
@@ -46,7 +47,6 @@ export default function SetupPage() {
   async function startGame(opts?: { forceNew?: boolean }) {
     const forceNew = !!opts?.forceNew;
 
-    // 버튼 2개라 로딩 상태 분리
     if (forceNew) setForceLoading(true);
     else setLoading(true);
 
@@ -54,7 +54,6 @@ export default function SetupPage() {
       const handle = localStorage.getItem("dc_handle") || "";
       const pin = localStorage.getItem("dc_pin") || "";
 
-      // 혹시 setup 진입 후 localStorage가 지워졌을 때 대비
       if (!handle.trim() || !/^\d{4,6}$/.test(pin.trim())) {
         alert("ID/PIN이 유효하지 않습니다. 홈에서 다시 확인해주세요.");
         router.replace("/");
@@ -79,7 +78,7 @@ export default function SetupPage() {
           answers,
           valuesProfile,
           protagonist,
-          forceNew, // 핵심: 새로 시작 강제 옵션
+          forceNew,
         }),
       });
 
@@ -99,8 +98,27 @@ export default function SetupPage() {
     }
   }
 
+  const anyLoading = loading || forceLoading;
+
   return (
     <main className="mx-auto max-w-md p-6">
+      {/* (5-A) 오버레이 로딩 */}
+      {anyLoading && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center">
+          <div className="rounded-2xl border border-white/10 bg-zinc-950/80 px-5 py-4 w-[320px]">
+            <div className="text-sm text-zinc-200">
+              {forceLoading ? "새 게임 생성 중…" : "게임 준비 중…"}
+            </div>
+            <div className="mt-3 h-2 w-full bg-white/10 rounded-full overflow-hidden">
+              <div className="h-full w-1/2 bg-emerald-400 animate-pulse" />
+            </div>
+            <div className="mt-3 text-xs text-zinc-400">
+              네트워크/모델 상황에 따라 최대 수십 초 걸릴 수 있어요.
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">주인공 설정</h2>
         <div className="text-sm text-zinc-300">
@@ -122,6 +140,7 @@ export default function SetupPage() {
                   "w-full text-left rounded-xl p-3 border",
                   selected ? "border-white/60 bg-white/10" : "border-white/10 bg-black/10",
                 ].join(" ")}
+                disabled={anyLoading}
                 onClick={() => {
                   setPicked((prev) => ({
                     ...prev,
@@ -143,18 +162,22 @@ export default function SetupPage() {
         <div className="mt-5 flex gap-2">
           <button
             className="rounded-xl border border-white/10 px-4 py-2 text-sm disabled:opacity-40"
-            disabled={step === 0 || loading || forceLoading}
+            disabled={step === 0 || anyLoading}
             onClick={() => setStep((s) => Math.max(0, s - 1))}
           >
             이전
           </button>
-          <button
-            className="ml-auto rounded-xl bg-white/90 px-4 py-2 text-sm font-medium text-zinc-900 disabled:opacity-40"
-            disabled={!picked[q.id] || loading || forceLoading}
-            onClick={() => setStep((s) => Math.min(QUESTIONS.length - 1, s + 1))}
-          >
-            다음
-          </button>
+
+          {/* (4) 마지막 문항에서는 '다음' 숨김 */}
+          {!isLast && (
+            <button
+              className="ml-auto rounded-xl bg-white/90 px-4 py-2 text-sm font-medium text-zinc-900 disabled:opacity-40"
+              disabled={!picked[q.id] || anyLoading}
+              onClick={() => setStep((s) => Math.min(QUESTIONS.length - 1, s + 1))}
+            >
+              다음
+            </button>
+          )}
         </div>
       </div>
 
@@ -163,19 +186,17 @@ export default function SetupPage() {
           목표: “정해진 길이 아니라도, 가치관이 충족되면 행복은 오른다.”
         </div>
 
-        {/* 기본: 이어서 or 없으면 새로 (API에서 active 있으면 resumed) */}
         <button
           className="w-full rounded-xl bg-emerald-400 px-4 py-3 text-zinc-950 font-semibold disabled:opacity-40"
-          disabled={!done || loading || forceLoading}
+          disabled={!done || anyLoading}
           onClick={() => startGame({ forceNew: false })}
         >
           {loading ? "시작 중..." : "이 설정으로 시작(이어하기 포함)"}
         </button>
 
-        {/* 강제 새로 시작 */}
         <button
           className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white font-semibold disabled:opacity-40"
-          disabled={!done || loading || forceLoading}
+          disabled={!done || anyLoading}
           onClick={() => startGame({ forceNew: true })}
         >
           {forceLoading ? "새로 생성 중..." : "새로 시작(강제)"}
@@ -183,7 +204,7 @@ export default function SetupPage() {
 
         <button
           className="w-full rounded-xl border border-white/10 px-4 py-3 text-sm text-zinc-200 disabled:opacity-40"
-          disabled={loading || forceLoading}
+          disabled={anyLoading}
           onClick={() => router.replace("/")}
         >
           홈으로 (ID/PIN 변경)

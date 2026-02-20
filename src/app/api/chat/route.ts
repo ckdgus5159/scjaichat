@@ -188,7 +188,7 @@ ${userText}
         },
       ],
     },
-    { attempts: 2, timeoutMs: 20_000 } // ✅ regen도 너무 짧으면 또 timeout 나서 여기서도 500 터짐
+    { attempts: 2, timeoutMs: 20_000 }
   );
 
   const regenerated = clipText((resp2.text ?? "").trim());
@@ -254,6 +254,42 @@ function estimateHappinessDelta(userText: string, valuesProfile: any): number {
   return 6;
 }
 
+// ✅ 6번 스탯(실제 저장/갱신): 단순 키워드 휴리스틱 (초기 버전)
+function estimateStatsDelta(userText: string) {
+  const t = userText.toLowerCase();
+
+  let money = 0;
+  let relationship = 0;
+  let reputation = 0;
+  let health = 0;
+
+  // money
+  if (/(저축|절약|예산|가계부|정리|상환|협상|환불)/.test(t)) money += 2;
+  if (/(대출|빚|연체|충동구매|질렀|결제|손실|파산)/.test(t)) money -= 2;
+  if (/(연봉|인상|보너스|수입|알바|부업|이직)/.test(t)) money += 1;
+  if (/(주식|코인|레버리지)/.test(t)) money -= 1;
+
+  // relationship
+  if (/(연락|대화|만나|데이트|사과|화해|고백|배려|선물)/.test(t)) relationship += 2;
+  if (/(잠수|무시|차단|싸우|비난|뒷담|끝내)/.test(t)) relationship -= 2;
+
+  // reputation
+  if (/(보고|공유|정리|기여|책임|약속|리드|발표|성과|납기|마감)/.test(t)) reputation += 2;
+  if (/(지각|무단|핑계|거짓말|대충|땡땡|회피)/.test(t)) reputation -= 2;
+
+  // health
+  if (/(운동|산책|수면|잠|휴식|회복|검진|상담|치료)/.test(t)) health += 2;
+  if (/(야근|밤샘|과로|폭식|술|담배|두통|불면)/.test(t)) health -= 2;
+
+  // 너무 크게 튀지 않게 제한
+  money = clamp(money, -3, 3);
+  relationship = clamp(relationship, -3, 3);
+  reputation = clamp(reputation, -3, 3);
+  health = clamp(health, -3, 3);
+
+  return { money, relationship, reputation, health };
+}
+
 /** ========== GET ========== */
 export async function GET(req: Request) {
   const auth = req.headers.get("authorization") || "";
@@ -270,7 +306,8 @@ export async function GET(req: Request) {
 
   const { data: game, error: gameErr } = await supabase
     .from("games")
-    .select("id,happiness,status,user_id")
+    // ✅ stats도 함께 내려줌
+    .select("id,happiness,status,user_id,money,relationship,reputation,health")
     .eq("id", gameId)
     .eq("user_id", userData.user.id)
     .single();
@@ -288,6 +325,12 @@ export async function GET(req: Request) {
   return NextResponse.json({
     happiness: game.happiness,
     status: game.status,
+    stats: {
+      money: game.money ?? 50,
+      relationship: game.relationship ?? 50,
+      reputation: game.reputation ?? 50,
+      health: game.health ?? 50,
+    },
     messages: (msgs ?? []).filter((m) => m.role !== "system").map((m) => ({
       role: m.role,
       content: m.content,
@@ -314,12 +357,12 @@ export async function POST(req: Request) {
     const body = PostSchema.parse(await req.json());
     const { gameId, userText } = body;
 
-    // ✅ 값 전달 정상 여부를 로그로 확정(문제 재현 시 확인용)
     console.log("[/api/chat POST]", { gameId, userTextLen: userText?.length, model: GEMINI_MODEL });
 
     const { data: game, error: gameErr } = await supabase
       .from("games")
-      .select("id,user_id,happiness,status,values_profile,protagonist")
+      // ✅ stats 포함해서 읽기
+      .select("id,user_id,happiness,status,values_profile,protagonist,money,relationship,reputation,health")
       .eq("id", gameId)
       .eq("user_id", user.id)
       .single();
@@ -333,6 +376,13 @@ export async function POST(req: Request) {
         happiness: game.happiness,
         happinessDelta: 0,
         status: game.status,
+        stats: {
+          money: game.money ?? 50,
+          relationship: game.relationship ?? 50,
+          reputation: game.reputation ?? 50,
+          health: game.health ?? 50,
+        },
+        statsDelta: { money: 0, relationship: 0, reputation: 0, health: 0 },
       });
     }
 
@@ -347,7 +397,7 @@ export async function POST(req: Request) {
     });
     if (insUserErr) return new NextResponse(insUserErr.message, { status: 400 });
 
-    // ✅ (3) 최근 10개 히스토리: desc로 가져오고 reverse로 원래 순서 복구
+    // 최근 10개 히스토리: desc로 가져오고 reverse로 원래 순서 복구
     const { data: historyDesc, error: histErr } = await supabase
       .from("messages")
       .select("role,content,created_at")
@@ -410,6 +460,13 @@ ${valuesProfileText}
 
     const delta = estimateHappinessDelta(userText, valuesProfile);
 
+    // ✅ 6번 스탯 delta + 새 값 계산(진짜 값)
+    const statsDelta = estimateStatsDelta(userText);
+    const newMoney = clamp((game.money ?? 50) + statsDelta.money, 0, 100);
+    const newRelationship = clamp((game.relationship ?? 50) + statsDelta.relationship, 0, 100);
+    const newReputation = clamp((game.reputation ?? 50) + statsDelta.reputation, 0, 100);
+    const newHealth = clamp((game.health ?? 50) + statsDelta.health, 0, 100);
+
     const ai = getGeminiClient();
 
     const reqArgs = {
@@ -432,11 +489,11 @@ ${valuesProfileText}
       ],
     };
 
-    // ✅ (2) timeout 20초 / attempts 2 (성공률↑, 불필요한 장기 retry↓)
+    // timeout 20초 / attempts 2
     const resp = await generateWithRetry(ai, reqArgs, { attempts: 2, timeoutMs: 20_000 });
     const draft = (resp.text ?? "").trim();
 
-    // ✅ 형식이 깨졌을 때만 1회 재생성 (너 기존 정책 유지)
+    // 형식이 깨졌을 때만 1회 재생성
     let assistantText = clipText(draft);
     if (assistantText && !gmHasFourBlocks(assistantText)) {
       assistantText = await regenOnce({
@@ -463,10 +520,17 @@ ${valuesProfileText}
     });
     if (insAIErr) return new NextResponse(insAIErr.message, { status: 400 });
 
-    // Update game
+    // ✅ Update game: happiness + 6번 스탯(실제 값) 저장
     const { error: upErr } = await supabase
       .from("games")
-      .update({ happiness: newHappiness, status: newStatus })
+      .update({
+        happiness: newHappiness,
+        status: newStatus,
+        money: newMoney,
+        relationship: newRelationship,
+        reputation: newReputation,
+        health: newHealth,
+      })
       .eq("id", gameId)
       .eq("user_id", user.id);
 
@@ -477,11 +541,18 @@ ${valuesProfileText}
       happiness: newHappiness,
       happinessDelta: delta,
       status: newStatus,
+      stats: {
+        money: newMoney,
+        relationship: newRelationship,
+        reputation: newReputation,
+        health: newHealth,
+      },
+      statsDelta,
     });
   } catch (e: any) {
     const status = e?.status ?? e?.cause?.status ?? e?.response?.status;
 
-    // ✅ (1) timeout/혼잡/레이트는 503으로 정규화해서 프론트가 "잠시 후 재시도" UX를 타게 함
+    // timeout/혼잡/레이트는 503으로 정규화
     if (status === 503 || status === 429 || e?.message === "gemini_timeout") {
       console.error("[/api/chat POST] gemini unavailable", {
         status,

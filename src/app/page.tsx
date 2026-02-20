@@ -14,14 +14,11 @@ export default function Home() {
   const [statusText, setStatusText] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      const h = localStorage.getItem("dc_handle") || "";
-      const p = localStorage.getItem("dc_pin") || "";
-      if (h) setHandle(h);
-      if (p) setPin(p);
-    } catch {
-      // ignore
-    }
+    // ✅ A) 입력칸만 비우기 (로컬 저장은 유지)
+    // - 이전에 했던 "로컬에서 읽어서 input에 다시 채우기"는 제거
+    // - setup/start에서는 localStorage를 계속 쓰므로 그대로 둠
+    setHandle("");
+    setPin("");
   }, []);
 
   async function ensureAnonSession() {
@@ -121,7 +118,7 @@ export default function Home() {
         setStatusText("기존 ID 확인 완료.");
       }
 
-      // 4) 로컬 저장
+      // 4) 로컬 저장 (✅ 유지)
       localStorage.setItem("dc_handle", h);
       localStorage.setItem("dc_pin", p);
 
@@ -149,9 +146,8 @@ export default function Home() {
       <h1 className="text-2xl font-semibold">드라마 채팅 프로토타입</h1>
 
       <p className="mt-3 text-zinc-300 leading-relaxed">
-        당신은 주인공의 ‘조언자’입니다. 질문 10개로 가치관(행복관)을 정하고,
-        채팅 한 번마다 행복이 오르거나 내려갑니다. 행복이 100이 되면 한 편의
-        자서전처럼 마무리됩니다.
+        당신은 주인공의 ‘조언자’입니다. 질문 10개로 가치관(행복관)을 정하고, 채팅 한 번마다
+        행복이 오르거나 내려갑니다. 행복이 100이 되면 한 편의 자서전처럼 마무리됩니다.
       </p>
 
       <div className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
@@ -165,15 +161,26 @@ export default function Home() {
           value={handle}
           onChange={(e) => setHandle(e.target.value)}
           disabled={busy}
+          // 자동완성 억제
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          name="dc_handle_input"
         />
 
         <input
           className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-3 outline-none"
           placeholder="PIN (숫자 4~6자리)"
           inputMode="numeric"
+          pattern="\d*"
+          maxLength={6}
+          type="password" // ✅ 화면 노출 방지
+          autoComplete="new-password" // ✅ 브라우저 저장/자동채움 방지에 유리
           value={pin}
-          onChange={(e) => setPin(e.target.value)}
+          onChange={(e) => setPin(e.target.value.replace(/[^\d]/g, ""))}
           disabled={busy}
+          name="dc_pin_input"
         />
 
         <button

@@ -55,7 +55,11 @@ function lacksActionTarget(exampleLine: string) {
   return !hasTargetHint;
 }
 
-async function ensureOpeningQualityOrRegenOnce(ai: ReturnType<typeof getGeminiClient>, draft: string, prompt: string) {
+async function ensureOpeningQualityOrRegenOnce(
+  ai: ReturnType<typeof getGeminiClient>,
+  draft: string,
+  prompt: string
+) {
   const clipped = clipText(draft);
   let needsRegen = !gmHasFourBlocks(clipped);
 
@@ -169,6 +173,12 @@ export async function POST(req: Request) {
   // answers 기본값(테이블 타입에 맞게 {} or [] 선택)
   const answers = body.answers ?? {};
 
+  // ✅ 6번 스탯(실제 저장) 초기값
+  const initialMoney = 50;
+  const initialRelationship = 50;
+  const initialReputation = 50;
+  const initialHealth = 50;
+
   // game 생성 (NOT NULL들 채움)
   const { data: newGame, error: insGameErr } = await supabase
     .from("games")
@@ -180,6 +190,12 @@ export async function POST(req: Request) {
       answers,
       protagonist: protagonist ?? {},
       values_profile: valuesProfile ?? {},
+
+      // ✅ 6번 스탯 컬럼에 진짜 값으로 저장 (default가 있어도 명시적으로 넣어 안전하게)
+      money: initialMoney,
+      relationship: initialRelationship,
+      reputation: initialReputation,
+      health: initialHealth,
     })
     .select("id,happiness,status,protagonist,values_profile")
     .single();
@@ -225,5 +241,7 @@ export async function POST(req: Request) {
     gameId: newGame.id,
     status: newGame.status,
     happiness: newGame.happiness,
+    // start 응답에 stats를 내려주고 싶으면 여기서 추가 가능:
+    // stats: { money: initialMoney, relationship: initialRelationship, reputation: initialReputation, health: initialHealth },
   });
 }
