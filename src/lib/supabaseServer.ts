@@ -11,3 +11,4 @@ export function supabaseServerWithAnon(accessToken?: string) {
       : undefined,
   });
 }
+//
