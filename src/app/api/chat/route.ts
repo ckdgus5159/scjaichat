@@ -11,6 +11,51 @@ const PostSchema = z.object({
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function withTimeout<T>(p: Promise<T>, ms: number, label = "timeout"): Promise<T> {
+  let t: any;
+  const timeout = new Promise<never>((_, rej) => {
+    t = setTimeout(() => rej(new Error(label)), ms);
+  });
+  try {
+    return await Promise.race([p, timeout]);
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function generateWithRetry(
+  ai: ReturnType<typeof getGeminiClient>,
+  args: Parameters<typeof ai.models.generateContent>[0],
+  opts?: { attempts?: number; timeoutMs?: number }
+) {
+  const attempts = opts?.attempts ?? 3;
+  const timeoutMs = opts?.timeoutMs ?? 12000; // 12초 안에 안 오면 끊고 재시도
+
+  let lastErr: any;
+
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const p = ai.models.generateContent(args);
+      return await withTimeout(p, timeoutMs, "gemini_timeout");
+    } catch (e: any) {
+      lastErr = e;
+      const status = e?.status ?? e?.cause?.status ?? e?.response?.status;
+      const retryable = status === 503 || status === 429 || e?.message === "gemini_timeout";
+
+      if (!retryable || i === attempts - 1) throw e;
+
+      const backoff = 300 * Math.pow(2, i); // 300, 600, 1200...
+      const jitter = Math.floor(Math.random() * 200);
+      await sleep(backoff + jitter);
+    }
+  }
+  throw lastErr;
+}
+
 
 /** ===== GM 출력 품질: 예시(명령) 검증/수정 ===== */
 
@@ -159,7 +204,7 @@ async function regenOnce(args: {
 ${userText}
   `.trim();
 
-  const resp2 = await ai.models.generateContent({
+  const resp2 = await generateWithRetry(ai, {
     model: GEMINI_MODEL,
     contents: [
       {
@@ -179,7 +224,7 @@ ${userText}
         ],
       },
     ],
-  });
+  }, {attempts: 2, timeoutMs: 12000 });
 
   const regenerated = clipText((resp2.text ?? "").trim());
   return regenerated || fallback;
@@ -339,9 +384,10 @@ export async function POST(req: Request) {
     .select("role,content")
     .eq("game_id", gameId)
     .order("created_at", { ascending: true })
-    .limit(16);
+    .limit(10);
 
   const valuesProfile = game.values_profile as any;
+  const valuesProfileText = clipText(JSON.stringify(valuesProfile), 800);
   const protagonist = game.protagonist as any;
 
   const system = `
@@ -361,7 +407,7 @@ export async function POST(req: Request) {
 - 한 줄: ${protagonist?.oneLine ?? ""}
 
 [가치관(행복관) 프로필]
-${JSON.stringify(valuesProfile, null, 2)}
+${JSON.stringify(valuesProfileText, null, 2)}
 
 [진행 규칙]
 1) 매 턴 너는 반드시 아래 4개 블록을 "정확히" 출력한다. 다른 문장/해설/규칙 설명을 추가하지 마라.
@@ -387,13 +433,13 @@ ${JSON.stringify(valuesProfile, null, 2)}
     .map((m) => `${m.role === "user" ? "플레이어(명령)" : "GM"}: ${m.content}`)
     .join("\n");
 
-  // ✅ (2) conversation clip: 최근 5000자만 전달 (속도 개선)
-  const conversation = clipConversation(conversationRaw, 5000);
+  // ✅ (2) conversation clip: 최근 2500자만 전달 (속도 개선)
+  const conversation = clipConversation(conversationRaw, 2500);
 
   const delta = estimateHappinessDelta(userText, valuesProfile);
 
   const ai = getGeminiClient();
-  const resp = await ai.models.generateContent({
+  const reqArgs = {
     model: GEMINI_MODEL,
     contents: [
       {
@@ -411,18 +457,16 @@ ${JSON.stringify(valuesProfile, null, 2)}
         ],
       },
     ],
-  });
-
+  };
+  const resp = await generateWithRetry(ai, reqArgs, { attempts: 3, timeoutMs: 12000 });
   const draft = (resp.text ?? "").trim();
 
-  // ✅ (4) 재생성 트리거 정밀화된 로직 사용
-  const assistantText = await ensureGoodExamplesOrRegenOnce({
-    ai,
-    system,
-    conversation,
-    userText,
-    draft,
-  });
+  // ✅ (4) format이 깨졌을때만 재생성
+  let assistantText = clipText(draft);
+  if (!gmHasFourBlocks(assistantText)) {
+    assistantText = await regenOnce({ ai, system, conversation, userText, reason: "format", fallback: assistantText });
+  }
+
 
   const newHappiness = clamp((game.happiness ?? 0) + delta, 0, 100);
   const newStatus = newHappiness >= 100 ? "finished" : "active";
