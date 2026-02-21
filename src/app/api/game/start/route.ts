@@ -39,7 +39,7 @@ ${context} 판타지 배제. 리얼리즘 유지.
 [당신의 상황]: 현재 직면한 구체적 상황. **반드시 100자 이내, 3문장 이하로 아주 짧고 강렬하게 작성.**
 [상태변화]: 없음
 [다음상황]: 바로 행동을 결정해야 하는 위기나 고민.
-[예시명령]: (1) (2) (3) 형식. 단, 구체적인 묘사나 따옴표를 빼고, 플레이어가 바로 행동할 수 있는 깔끔한 한 문장으로 작성하라. (예: (1) 과방으로 달려가 충전기와 족보를 챙긴다.)
+[예시명령]: (1) (2) (3) 형식. 단, 구체적인 묘사나 따옴표를 빼고, 플레이어가 바로 행동할 수 있는 깔끔한 한 문장으로 작성하라.
 `.trim();
 }
 
@@ -89,8 +89,13 @@ export async function POST(req: Request) {
     opening = (resp.text ?? "").trim();
   } catch {}
 
+  // ✅ 오프닝 메시지에 초기 스탯을 meta로 저장하여 프론트에서 확인할 수 있게 함
   await supabase.from("messages").insert({
-    game_id: newGame.id, user_id: userData.user.id, role: "assistant", content: opening, meta: { kind: "opening" }
+    game_id: newGame.id, user_id: userData.user.id, role: "assistant", content: opening, 
+    meta: { 
+      kind: "opening",
+      stats: { money: 50, relationship: 50, reputation: 50, health: 50, happiness: 0 } 
+    }
   });
 
   return NextResponse.json({ gameId: newGame.id });

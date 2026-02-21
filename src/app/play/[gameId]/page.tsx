@@ -3,7 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 
-type Msg = { role: "user" | "assistant"; content: string };
+// ✅ Msg 타입에 stats 속성을 추가 (해당 턴에 저장된 과거 스탯)
+type Msg = { role: "user" | "assistant"; content: string; stats?: Stats & { happiness?: number } };
 type Stats = { money: number; relationship: number; reputation: number; health: number; };
 type PageProps = { params: Promise<{ gameId: string }>; };
 
@@ -92,7 +93,10 @@ export default function PlayPage({ params }: PageProps) {
       if (data.happiness !== undefined) setHappiness(clamp01to100(data.happiness));
       if (data.status) setStatus(data.status === "finished" ? "finished" : "active");
       if (data.stats) setStats(prev => mergeStats(prev, data.stats));
-      setMessages(prev => [...prev, { role: "assistant", content: data.assistantText || "오류" }]);
+      
+      // ✅ 최신 스탯 정보를 로컬 state 메시지 배열에도 같이 저장 (낙관적 UI 업데이트)
+      const latestStats = { ...mergeStats({} as any, data.stats), happiness: clamp01to100(data.happiness) };
+      setMessages(prev => [...prev, { role: "assistant", content: data.assistantText || "오류", stats: latestStats }]);
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "서버 응답 오류" }]);
     } finally {
@@ -103,10 +107,9 @@ export default function PlayPage({ params }: PageProps) {
   const formatContent = (content: string) => {
     const match = content.match(/(?:^|\n)[-\d.\s*]*\[?(캐릭터 소개|당신의 상황|상태변화|다음상황|예시명령|시간의 흐름|결과)\]?:?/);
     let cleaned = match ? content.substring(match.index || 0) : content;
-
     cleaned = cleaned.replace(/(?:^|\n)[-\d.\s*]*\[?(캐릭터 소개|당신의 상황|상태변화|다음상황|예시명령|시간의 흐름|결과)\]?:?/g, "\n$1:");
 
-    // 상태변화를 숨기지 않고 아름다운 블록으로 렌더링하도록 변경
+    // ✅ 결과 -> 상태변화 -> 시간의 흐름 순으로 아름답게 포맷팅
     return cleaned
       .replace(/캐릭터 소개:/g, "👤 **프로필**\n")
       .replace(/결과:/g, "📝 **결과**\n")
@@ -118,15 +121,16 @@ export default function PlayPage({ params }: PageProps) {
       .trim();
   };
 
-  let turnCount = 0; // 턴 인덱스 계산용 변수
+  let turnCount = 0; // 유저 턴 횟수를 세기 위한 변수
 
   return (
-    <main className="mx-auto max-w-md p-4 pb-32 min-h-screen flex flex-col">
-      {/* 고정된 ThemeHeader 아래에 찰싹 붙도록 top-0으로 유지 (부모가 spacer 역할을 해줌) */}
-      <div className="sticky top-0 z-10 bg-stone-50/95 dark:bg-zinc-950/95 backdrop-blur border-b border-stone-200 dark:border-white/5 p-3 rounded-xl mb-4 shadow-sm transition-colors">
+    <main className="mx-auto max-w-md p-4 pb-32 min-h-screen flex flex-col relative">
+      
+      {/* ✅ 스크롤을 내려도 항상 상단에 고정되도록 sticky, top-[52px], z-30 설정 */}
+      <div className="sticky top-[52px] z-30 bg-stone-50/95 dark:bg-zinc-950/95 backdrop-blur border-b border-stone-200 dark:border-white/5 p-3 rounded-xl mb-4 shadow-sm transition-colors pt-2">
         {valuesSummary && (
-          <div className="text-[11px] text-stone-600 dark:text-emerald-300/80 text-center mb-2 font-medium tracking-wide">
-            가치관: {valuesSummary}
+          <div className="text-[11px] text-stone-600 dark:text-emerald-300/80 text-center mb-3 font-medium tracking-wide">
+            {valuesSummary}
           </div>
         )}
         <div className="grid grid-cols-5 gap-1.5">
@@ -141,7 +145,13 @@ export default function PlayPage({ params }: PageProps) {
       <div className="space-y-4 flex-1">
         {messages.map((m, i) => {
           const isUser = m.role === "user";
-          if (isUser) turnCount++; // 유저 메시지일 때만 턴 수 증가
+          if (isUser) turnCount++; // 유저의 메시지일 때만 인덱스 증가
+
+          // ✅ 해당 턴의 과거 스탯을 렌더링. 저장된 게 없으면(에러 방지) 현재 최신 스탯 사용
+          const msgStats = m.stats || {
+            money: stats.money, relationship: stats.relationship, reputation: stats.reputation, 
+            health: stats.health, happiness: happiness
+          };
 
           return (
             <div key={i} className={`rounded-2xl p-4 border shadow-sm transition-colors ${
@@ -153,9 +163,14 @@ export default function PlayPage({ params }: PageProps) {
                 {isUser ? `Player (Turn ${turnCount})` : "GM"}
               </div>
               
+              {/* ✅ GM 메시지에 해당 턴 기준 과거 스탯을 기록처럼 작게 표시 */}
               {!isUser && (
-                <div className="mb-2 flex flex-wrap gap-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono border-b border-emerald-200 dark:border-emerald-500/10 pb-1.5">
-                  <span>💰{stats.money}</span> <span>🤝{stats.relationship}</span> <span>⭐{happiness}</span> <span>🏆{stats.reputation}</span> <span>💪{stats.health}</span>
+                <div className="mb-3 flex flex-wrap gap-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono border-b border-emerald-200 dark:border-emerald-500/10 pb-1.5 opacity-80">
+                  <span>💰{msgStats.money}</span> 
+                  <span>🤝{msgStats.relationship}</span> 
+                  <span>⭐{msgStats.happiness}</span> 
+                  <span>🏆{msgStats.reputation}</span> 
+                  <span>💪{msgStats.health}</span>
                 </div>
               )}
               <div className="text-sm leading-relaxed whitespace-pre-wrap">{isUser ? m.content : formatContent(m.content)}</div>
@@ -176,7 +191,7 @@ export default function PlayPage({ params }: PageProps) {
         <div ref={bottomRef} />
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-stone-50/95 dark:bg-zinc-950/95 backdrop-blur border-t border-stone-200 dark:border-white/10 transition-colors">
+      <div className="fixed bottom-0 left-0 right-0 bg-stone-50/95 dark:bg-zinc-950/95 backdrop-blur border-t border-stone-200 dark:border-white/10 transition-colors z-40">
         <div className="mx-auto max-w-md p-3 flex gap-2">
           <input className="flex-1 rounded-xl bg-white border border-stone-200 text-stone-900 px-4 py-3 outline-none focus:border-emerald-500 dark:bg-white/5 dark:border-white/10 dark:text-zinc-50"
             placeholder={status === "finished" ? "시나리오가 종료되었습니다." : "행동을 입력하세요..."}
