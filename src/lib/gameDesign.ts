@@ -176,17 +176,20 @@ export function buildValuesProfile(answers: SetupAnswer[]): ValuesProfile {
 }
 
 export function buildProtagonist(answers: SetupAnswer[]): Protagonist {
-  // 최소 프로토타입용: 답변 일부로 톤/나이/직업을 가볍게 결정(원하면 나중에 더 정교화)
-  const tone: Protagonist["tone"] = "warm";
-  const ageBand: Protagonist["ageBand"] = "30s";
-
-  const dayJobPool = ["사무직", "서비스직", "프리랜서", "대학원생", "취준생", "개발자", "디자이너"];
+  // 간단한 로직으로 tone과 ageBand 결정 (기존 로직 유지)
+  const tone = answers.length % 2 === 0 ? "warm" : "dry";
+  const ageBand = "20s"; // 기본값
+  const dayJobPool = ["사무직", "전문직", "프리랜서", "서비스직"];
   const idx = answers.reduce((acc, a) => acc + a.choiceId.charCodeAt(0), 0) % dayJobPool.length;
 
+  // ✅ 오류 해결: Protagonist 타입에 추가된 gender, occupation, subInfo 기본값을 넣어줍니다.
   return {
     tone,
     ageBand,
+    gender: "female",      // 기본값 (setup 페이지에서 사용자 입력으로 덮어씌워짐)
+    occupation: "worker",  // 기본값
+    subInfo: "",           // 기본값
     dayJob: dayJobPool[idx],
-    oneLine: "지극히 평범한 하루 속에서, 자주 흔들리지만 계속 살아가는 사람.",
+    oneLine: "당신의 새로운 인생 드라마가 시작됩니다.",
   };
 }
