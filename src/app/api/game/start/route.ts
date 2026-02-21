@@ -12,29 +12,13 @@ const StartSchema = z.object({
   answers: z.any().optional(),
 });
 
-function clipText(text: string, maxLen = 2200) {
-  const t = (text ?? "").trim();
-  return t.length > maxLen ? t.slice(0, maxLen).trim() : t;
-}
-
-function gmHasRequiredBlocks(text: string) {
-  const required = ["캐릭터 소개:", "당신의 상황:", "상태변화:", "다음상황:", "예시명령:"];
-  return required.every((h) => text.includes(h) || text.includes(h.replace(':', '')));
-}
-
-async function ensureQuality(ai: any, draft: string, prompt: string) {
-  const clipped = clipText(draft);
-  if (!gmHasRequiredBlocks(clipped)) return clipped;
-  return clipped;
-}
-
 function buildOpeningPrompt(protagonist: any, valuesProfile: any) {
   const occ = protagonist?.occupation;
   const info = protagonist?.subInfo || "";
   let context = "";
 
   if (occ === "highschool") {
-    context = `배경은 대한민국 고등학교. 계열/유형은 ${info}이다. 입시와 친구 관계 등 10대의 현실.`;
+    context = `배경은 대한민국 고등학교. 계열은 ${info}이다. 입시와 친구 관계 등 10대의 현실.`;
   } else if (occ === "student") {
     context = `배경은 대학교 캠퍼스. 전공 학과는 ${info}이다. 학점, 취업 등 대학생의 현실.`;
   } else {
@@ -45,13 +29,17 @@ function buildOpeningPrompt(protagonist: any, valuesProfile: any) {
 너는 현실 밀착형 인생 드라마의 GM이다.
 ${context} 판타지 배제. 리얼리즘 유지.
 
+[절대 금지 사항]
+1. 절대로 너의 생각 과정(thought, context 분석 등)을 출력하지 마라.
+2. 각 블록 앞에 '1.', '2.', '-' 같은 숫자나 기호를 붙이지 마라. 오직 대괄호 [ ] 태그만 사용하라.
+
 [출력 규칙 - 오프닝 전용]
-반드시 아래 5개 블록으로 정확히 출력하라.
-1. 캐릭터 소개: 주인공의 신분과 성향을 1~2문장으로 요약.
-2. 당신의 상황: 현재 직면한 구체적 상황 묘사. **반드시 100자 이내, 최대 3문장으로 짧게 작성.**
-3. 상태변화: 없음
-4. 다음상황: 바로 행동을 결정해야 하는 위기나 고민.
-5. 예시명령: (1) (2) (3) 형식
+반드시 아래 5개 태그 형식으로만 즉시 출력하라.
+[캐릭터 소개]: 주인공의 신분과 성향을 1~2문장으로 요약.
+[당신의 상황]: 현재 직면한 구체적 상황. **반드시 100자 이내, 3문장 이하로 아주 짧고 강렬하게 작성.**
+[상태변화]: 없음
+[다음상황]: 바로 행동을 결정해야 하는 위기나 고민.
+[예시명령]: (1) (2) (3) 형식. 단, 구체적인 묘사나 따옴표를 빼고, 플레이어가 바로 행동할 수 있는 깔끔한 한 문장으로 작성하라. (예: (1) 과방으로 달려가 충전기와 족보를 챙긴다.)
 `.trim();
 }
 
@@ -91,14 +79,14 @@ export async function POST(req: Request) {
   const ai = getGeminiClient();
   const openingPrompt = buildOpeningPrompt(newGame.protagonist, newGame.values_profile);
   
-  let opening = "캐릭터 소개: 알 수 없음\n당신의 상황: 로딩 중 오류가 발생했습니다.\n상태변화: 없음\n다음상황: 서버 응답 지연\n예시명령: (1) 다시 시도한다";
+  let opening = "[캐릭터 소개]: 알 수 없음\n[당신의 상황]: 로딩 중 오류가 발생했습니다.\n[상태변화]: 없음\n[다음상황]: 서버 응답 지연\n[예시명령]: (1) 다시 시도한다";
 
   try {
     const resp = await ai.models.generateContent({
       model: GEMINI_MODEL,
       contents: [{ role: "user", parts: [{ text: openingPrompt }] }],
     });
-    opening = await ensureQuality(ai, resp.text || "", openingPrompt);
+    opening = (resp.text ?? "").trim();
   } catch {}
 
   await supabase.from("messages").insert({

@@ -26,9 +26,8 @@ export default function SetupPage() {
   useEffect(() => {
     const handle = localStorage.getItem("dc_handle") || "";
     const pin = localStorage.getItem("dc_pin") || "";
-    const ok = handle.trim().length > 0 && /^\d{4,6}$/.test(pin.trim());
-    if (!ok) {
-      alert("ID/PIN이 없습니다. 홈에서 ID 확인/등록 후 진행해주세요.");
+    if (!(handle.trim().length > 0 && /^\d{4,6}$/.test(pin.trim()))) {
+      alert("ID/PIN이 없습니다. 홈에서 다시 진행해주세요.");
       router.replace("/");
     }
   }, [router]);
@@ -59,7 +58,7 @@ export default function SetupPage() {
         gender: protoState.gender as any,
         occupation: protoState.occupation as any,
         subInfo: protoState.subInfo || "",
-        dayJob: protoState.occupation === "highschool" ? `${protoState.subInfo} 고등학생` :
+        dayJob: protoState.occupation === "highschool" ? `${protoState.subInfo} 고등학생` : 
                 protoState.occupation === "student" ? `${protoState.subInfo} 대학생` : `${protoState.subInfo} 직장인`,
         oneLine: `${protoState.ageBand} ${protoState.occupation === "highschool" ? "고등학생" : protoState.occupation === "student" ? "대학생" : "직장인"}의 이야기.`
       };
@@ -81,13 +80,12 @@ export default function SetupPage() {
 
   const isAnyLoading = loading || forceLoading;
 
-  // 전체 화면 로딩 애니메이션
   if (isAnyLoading) {
     return (
-      <main className="fixed inset-0 z-50 bg-zinc-950 flex flex-col items-center justify-center">
-        <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <h2 className="text-lg font-bold text-emerald-400 animate-pulse">당신만의 서사를 구축하는 중...</h2>
-        <p className="text-xs text-zinc-500 mt-2">가치관 분석 및 시나리오 렌더링</p>
+      <main className="fixed inset-0 z-50 bg-stone-50 dark:bg-zinc-950 flex flex-col items-center justify-center transition-colors">
+        <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-6 shadow-sm dark:shadow-[0_0_15px_rgba(16,185,129,0.5)]"></div>
+        <h2 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 animate-pulse tracking-widest mb-2">당신만의 세계를 구축하는 중</h2>
+        <p className="text-sm text-stone-500 dark:text-zinc-500">가치관 분석 및 AI 시나리오 초기화가 진행되고 있습니다.</p>
       </main>
     );
   }
@@ -95,33 +93,32 @@ export default function SetupPage() {
   if (done && showProfileInput) {
     return (
       <main className="mx-auto max-w-md p-6 min-h-[80vh] flex flex-col justify-center">
-        <h2 className="text-xl font-bold mb-6 text-emerald-400">캐릭터 정보 입력</h2>
-        <div className="space-y-6 bg-white/5 p-6 rounded-3xl border border-white/10">
+        <h2 className="text-xl font-bold mb-6 text-emerald-600 dark:text-emerald-400">캐릭터 정보 입력</h2>
+        <div className="space-y-6 bg-white border border-stone-200 dark:bg-white/5 p-6 rounded-3xl dark:border-white/10 shadow-md transition-colors">
           <div>
-            <label className="text-xs text-zinc-500 font-bold uppercase">나이대 및 역할</label>
+            <label className="text-xs text-stone-500 dark:text-zinc-500 font-bold uppercase">나이대 및 신분 선택</label>
             <div className="grid grid-cols-3 gap-2 mt-2">
               {[
-                { id: "10대", occ: "highschool", label: "10대(고등학생)" },
-                { id: "20대", occ: "student", label: "20대(대학생)" },
-                { id: "30대", occ: "worker", label: "30대(직장인)" }
+                { id: "10대", label: "10대 (고등학생)", occ: "highschool" },
+                { id: "20대", label: "20대 (대학생)", occ: "student" },
+                { id: "30대", label: "30대 (직장인)", occ: "worker" }
               ].map(a => (
                 <button key={a.id} onClick={() => setProtoState({...protoState, ageBand: a.id as any, occupation: a.occ as any})}
-                  className={`py-3 rounded-xl text-xs font-bold border transition ${protoState.ageBand === a.id ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-white/10 text-zinc-400'}`}>
+                  className={`py-3 rounded-xl text-xs font-semibold border transition text-center ${protoState.ageBand === a.id ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'border-stone-200 text-stone-600 bg-stone-50 hover:bg-stone-100 dark:border-white/10 dark:text-zinc-400 dark:bg-transparent dark:hover:bg-white/5'}`}>
                   {a.label}
                 </button>
               ))}
             </div>
           </div>
           <div>
-            <label className="text-xs text-zinc-500 font-bold uppercase">
-              {protoState.occupation === "highschool" ? "학교 계열 (예: 인문계-문과, 예고, 체고)" : 
-               protoState.occupation === "student" ? "전공 학과 (예: 컴퓨터공학, 경영학)" : "직무 (예: 기획, 개발, 서비스)"}
+            <label className="text-xs text-stone-500 dark:text-zinc-500 font-bold uppercase">
+              {protoState.occupation === "highschool" ? "계열 입력" : protoState.occupation === "student" ? "학과 입력" : "직무 입력"}
             </label>
             <input type="text" value={protoState.subInfo} onChange={(e) => setProtoState({...protoState, subInfo: e.target.value})}
-              placeholder="직접 입력해주세요"
-              className="w-full mt-2 bg-black/40 border border-white/10 rounded-xl p-3 outline-none focus:border-emerald-500 text-white" />
+              placeholder={protoState.occupation === "highschool" ? "예: 문과, 이과, 예체능, 특성화고" : protoState.occupation === "student" ? "예: 경영학과, 컴퓨터공학과" : "예: 기획, 개발, 영업, 디자인"}
+              className="w-full mt-2 bg-stone-50 border border-stone-200 text-stone-900 dark:bg-black/40 dark:border-white/10 rounded-xl p-3 outline-none focus:border-emerald-500 dark:text-white transition-colors" />
           </div>
-          <button className="w-full rounded-xl bg-emerald-400 py-4 text-zinc-950 font-bold disabled:opacity-40"
+          <button className="w-full rounded-xl bg-emerald-500 text-white dark:bg-emerald-400 py-4 dark:text-zinc-950 font-bold disabled:opacity-40"
             disabled={!protoState.subInfo} onClick={() => startGame({ forceNew: false })}>이 설정으로 드라마 시작</button>
         </div>
       </main>
@@ -131,32 +128,32 @@ export default function SetupPage() {
   return (
     <main className="mx-auto max-w-md p-6">
       <div className="flex items-center justify-between mb-8">
-        <h2 className="text-lg font-semibold">가치관 설정</h2>
-        <div className="text-sm text-zinc-300">{step + 1} / {QUESTIONS.length}</div>
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-white">가치관 설정</h2>
+        <div className="text-sm text-stone-500 dark:text-zinc-300">{step + 1} / {QUESTIONS.length}</div>
       </div>
-      <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-5">
-        <div className="text-sm text-zinc-300">{q.title}</div>
-        <div className="mt-2 text-lg font-medium leading-snug">{q.prompt}</div>
-        <div className="mt-4 space-y-2">
+      <div className="mt-4 rounded-2xl border border-stone-200 bg-white dark:border-white/10 dark:bg-white/5 p-5 shadow-sm transition-colors">
+        <div className="text-sm text-emerald-600 dark:text-emerald-400/80 font-bold tracking-wide">{q.title}</div>
+        <div className="mt-3 text-lg font-medium leading-snug text-stone-800 dark:text-white">{q.prompt}</div>
+        <div className="mt-6 space-y-2">
           {q.choices.map((c) => {
             const selected = picked[q.id]?.choiceId === c.id;
             return (
-              <button key={c.id} className={["w-full text-left rounded-xl p-3 border transition", selected ? "border-emerald-500 bg-emerald-500/10 text-emerald-400" : "border-white/10 bg-black/10 text-zinc-400"].join(" ")}
+              <button key={c.id} className={["w-full text-left rounded-xl p-4 border transition", selected ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : "border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100 dark:border-white/10 dark:bg-black/20 dark:text-zinc-300 dark:hover:bg-white/5"].join(" ")}
                 onClick={() => setPicked(prev => ({ ...prev, [q.id]: { qid: q.id, choiceId: c.id, choiceText: c.text, weights: c.weights } }))}>
                 {c.text}
               </button>
             );
           })}
         </div>
-        <div className="mt-5 flex gap-2">
-          <button className="rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-400"
+        <div className="mt-6 flex gap-2">
+          <button className="rounded-xl border border-stone-200 dark:border-white/10 px-4 py-3 text-sm text-stone-600 dark:text-zinc-400 font-medium bg-white dark:bg-transparent"
             disabled={step === 0} onClick={() => setStep(s => s - 1)}>이전</button>
-          {!isLast && <button className="ml-auto rounded-xl bg-white/90 px-4 py-2 text-sm font-medium text-zinc-900 disabled:opacity-40"
+          {!isLast && <button className="ml-auto rounded-xl bg-stone-800 text-white dark:bg-white/90 px-6 py-3 text-sm font-bold dark:text-zinc-900 disabled:opacity-40"
             disabled={!picked[q.id]} onClick={() => setStep(s => s + 1)}>다음</button>}
         </div>
       </div>
       {isLast && done && (
-        <button className="w-full mt-6 rounded-xl bg-emerald-400 py-4 text-zinc-950 font-bold"
+        <button className="w-full mt-6 rounded-xl bg-emerald-500 text-white dark:bg-emerald-400 py-4 dark:text-zinc-950 font-bold shadow-md"
           onClick={() => setShowProfileInput(true)}>테스트 완료! 정보 입력하러 가기</button>
       )}
     </main>
