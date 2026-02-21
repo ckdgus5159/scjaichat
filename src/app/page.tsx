@@ -21,9 +21,13 @@ export default function Home() {
   async function ensureAnonSession() {
     const { data } = await supabaseBrowser.auth.getSession();
     if (data.session) return data.session;
+
     const res = await supabaseBrowser.auth.signInAnonymously();
     if (res.error) throw res.error;
-    return res.data.session;
+
+    const session = res.data.session;
+    if (!session) throw new Error("세션 생성에 실패했습니다.");
+    return session;
   }
 
   function validateInputs(h: string, p: string) {
@@ -34,6 +38,7 @@ export default function Home() {
 
   async function maybeResumeOrGoSetup(h: string) {
     setStatusText("진행 중인 게임 확인 중...");
+
     const { data: existingGame, error: gameSelErr } = await supabaseBrowser
       .from("games")
       .select("id, created_at")
@@ -51,6 +56,8 @@ export default function Home() {
         router.push(`/play/${existingGame.id}`);
         return;
       }
+      router.push("/setup");
+      return;
     }
     router.push("/setup");
   }
@@ -58,19 +65,19 @@ export default function Home() {
   async function checkOrCreateIdentityThenGo() {
     const h = handle.trim();
     const p = pin.trim();
+
     const msg = validateInputs(h, p);
-    if (msg) { alert(msg); return; }
+    if (msg) {
+      alert(msg);
+      return;
+    }
 
     setBusy(true);
     setStatusText("ID 확인 중...");
 
     try {
       const session = await ensureAnonSession();
-      
-      // ✅ 오류 해결 부분: session이 null인지 한 번 더 체크하거나 non-null assertion(!) 사용
-      if (!session) {
-        throw new Error("세션을 생성할 수 없습니다. 네트워크를 확인해주세요.");
-      }
+      if (!session) throw new Error("세션을 초기화할 수 없습니다.");
       const uid = session.user.id;
 
       const { data: existing, error: selErr } = await supabaseBrowser
@@ -83,10 +90,15 @@ export default function Home() {
 
       if (!existing) {
         const ok = window.confirm("기존 DB에 없는 ID입니다. 추가하시겠습니까?");
-        if (!ok) { setStatusText("취소됨"); return; }
+        if (!ok) {
+          setStatusText("취소됨");
+          return;
+        }
+
         const { error: upErr } = await supabaseBrowser
           .from("profiles")
           .upsert({ id: uid, handle: h, pin: p }, { onConflict: "id" });
+
         if (upErr) throw upErr;
         setStatusText("새 ID를 생성했습니다.");
       } else {
@@ -111,22 +123,22 @@ export default function Home() {
 
   return (
     <main className="mx-auto max-w-md p-6">
-      <h1 className="text-2xl font-semibold text-emerald-400">Drama Chat</h1>
-      <p className="mt-3 text-zinc-300 leading-relaxed text-sm">
-        질문 10개로 가치관을 정하고, AI와 함께 당신만의 서사를 만들어보세요.
+      <h1 className="text-2xl font-semibold text-emerald-400">드라마 채팅 프로토타입</h1>
+      <p className="mt-3 text-zinc-300 leading-relaxed">
+        당신은 주인공의 ‘조언자’입니다. 질문 10개로 가치관을 정하고, AI와 함께 현실 밀착형 서사를 만들어보세요.
       </p>
 
-      <div className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4 space-y-3 shadow-xl">
+      <div className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
         <input
-          className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-3 outline-none focus:border-emerald-500 transition-colors"
-          placeholder="사용자 ID"
+          className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-3 outline-none focus:border-emerald-500"
+          placeholder="ID (예: teamA_lch51)"
           value={handle}
           onChange={(e) => setHandle(e.target.value)}
           disabled={busy}
           autoComplete="off"
         />
         <input
-          className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-3 outline-none focus:border-emerald-500 transition-colors"
+          className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-3 outline-none focus:border-emerald-500"
           placeholder="PIN (숫자 4~6자리)"
           type="password"
           value={pin}
@@ -134,19 +146,13 @@ export default function Home() {
           disabled={busy}
         />
         <button
-          className="w-full rounded-xl bg-emerald-400 px-4 py-3 text-zinc-900 font-bold disabled:opacity-40 hover:bg-emerald-300 transition-colors"
+          className="w-full rounded-xl bg-emerald-400 px-4 py-3 text-zinc-950 font-bold disabled:opacity-40"
           onClick={checkOrCreateIdentityThenGo}
           disabled={busy}
         >
           {busy ? "확인 중..." : "ID 확인/등록 후 시작"}
         </button>
-        {statusText && <div className="text-xs text-zinc-300 text-center">{statusText}</div>}
-      </div>
-
-      <div className="mt-6">
-        <Link className="block text-center text-xs text-zinc-500 underline hover:text-zinc-400" href="/setup">
-          (디버그) 바로 시작하기
-        </Link>
+        {statusText && <div className="text-xs text-zinc-400">{statusText}</div>}
       </div>
     </main>
   );
