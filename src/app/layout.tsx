@@ -1,17 +1,13 @@
+"use client";
+
 import "./globals.css";
 import Link from "next/link";
-import type { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Drama Chat Prototype",
-  description: "AI chat drama prototype with happiness stat",
-};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko">
-      <body className="min-h-screen bg-zinc-950 text-zinc-50">
-        {/* Global banner/header */}
+    // 'dark' 클래스를 강제하고 color-scheme을 dark로 고정하여 항상 다크모드 유지
+    <html lang="ko" className="dark" style={{ colorScheme: 'dark' }}>
+      <body className="min-h-screen bg-zinc-950 text-zinc-50 antialiased">
         <header className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950/80 backdrop-blur">
           <div className="mx-auto max-w-md px-4 py-3 flex items-center justify-between">
             <Link href="/" className="font-semibold tracking-tight">
@@ -25,7 +21,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
           </div>
         </header>
-
         {children}
       </body>
     </html>

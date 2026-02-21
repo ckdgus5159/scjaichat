@@ -18,59 +18,39 @@ function clipText(text: string, maxLen = 2200) {
 }
 
 function gmHasFourBlocks(text: string) {
-  const required = ["결과:", "상태변화:", "다음상황:", "가능한 명령 예시:"];
+  const required = ["상태변화:", "다음상황:", "예시 명령:"];
   return required.every((h) => text.includes(h));
 }
-
-// ... (extractExamplesLines, countExamples, isReactionishExample, lacksActionTarget 함수들은 기존과 동일)
 
 async function ensureOpeningQualityOrRegenOnce(ai: any, draft: string, prompt: string) {
   const clipped = clipText(draft);
   let needsRegen = !gmHasFourBlocks(clipped);
-  // ... (기존 검증 로직 유지)
   if (!needsRegen) return clipped;
-  // (Regen 로직 생략 - 기존과 동일)
   return clipped; 
 }
 
 function buildOpeningPrompt(protagonist: any, valuesProfile: any) {
-  // ✅ 신분에 따른 시나리오 배경 동적 생성
   let context = "";
   const occ = protagonist?.occupation;
   const info = protagonist?.subInfo || "";
 
   if (occ === "highschool") {
-    context = `배경은 대한민국 고등학교의 현실적인 학교 생활이다. 학교명은 ${info}이다. 입시 압박, 야간 자율학습, 친구 관계 등 10대의 현실을 담아라.`;
+    context = `배경은 대한민국 고등학교의 현실적인 학교 생활이다. 학교 유형은 ${info}이다. 입시 압박, 친구 관계 등 10대의 현실을 담아라.`;
   } else if (occ === "student") {
-    context = `배경은 대학교 캠퍼스이다. 전공은 ${info}이다. 과제, 취업 고민, 동아리 등 대학생의 현실을 담아라.`;
+    context = `배경은 대학교 캠퍼스이다. 전공은 ${info}이다. 과제, 취업 고민 등 대학생의 현실을 담아라.`;
   } else {
-    context = `배경은 치열한 직장 생활이다. 직종은 ${info}이다. 성과 압박, 상사 갈등 등 K-직장인의 현실을 담아라.`;
+    context = `배경은 치열한 직장 생활이다. 직무는 ${info}이다. 성과 압박, 상사 갈등 등 K-직장인의 현실을 담아라.`;
   }
 
   return `
 너는 "현실 밀착형 인생 드라마" 텍스트 어드벤처의 진행자(GM)다.
-${context}
-과장된 판타지 금지. 목표 정서: 낭만 + 자아성취.
+${context} 판타지 금지. 리얼리즘 유지.
 
-[주인공 설정]
-- 나이대: ${protagonist?.ageBand ?? "20s"}
-- 신분: ${protagonist?.dayJob ?? "일반인"}
-- 성격 톤: ${protagonist?.tone ?? "warm"}
-- 한 줄: ${protagonist?.oneLine ?? ""}
-
-[가치관 프로필]
-${JSON.stringify(valuesProfile ?? {}, null, 2)}
-
-[출력 규칙]
-반드시 아래 4개 블록만 출력:
-결과:
-상태변화:
-다음상황:
-가능한 명령 예시:
-
-[진행 규칙]
-- 첫 갈림길은 행동 선택이어야 한다.
-- 예시 3개는 (1) 커리어/학업 (2) 관계/인간관계 (3) 자기관리 축으로 구성하라.
+[출력 규칙 - 오프닝 전용]
+1. [당신의 상황]: '결과:' 대신 반드시 이 태그를 사용할 것. 수치 언급 없이 소설처럼 묘사하라.
+2. [상태변화]: 없음
+3. [다음상황]: 사용자가 마주한 첫 번째 선택 상황 제시.
+4. [예시 명령]: (1) (2) (3) 형식 유지.
 `.trim();
 }
 
@@ -116,7 +96,7 @@ export async function POST(req: Request) {
   const ai = getGeminiClient();
   const openingPrompt = buildOpeningPrompt(newGame.protagonist, newGame.values_profile);
   
-  let opening = "결과: 새로운 하루가 시작됩니다.\n상태변화: 행복 +0\n다음상황: 로딩 중 오류가 발생했습니다. 메시지를 다시 입력해주세요.\n가능한 명령 예시: (1) 다시 시도한다";
+  let opening = "당신의 상황: 새로운 하루가 시작됩니다.\n상태변화: 없음\n다음상황: 로딩 중 오류가 발생했습니다.\n예시 명령: (1) 다시 시도한다";
 
   try {
     const resp = await ai.models.generateContent({
