@@ -25,7 +25,6 @@ function StatChip(props: { icon: string; label: string; value: number; emphasize
   const { icon, label, value, emphasize } = props;
   const v = clamp01to100(value);
   
-  // 라이트/다크 모드 대응
   const tone = emphasize 
     ? "bg-emerald-100/50 border-emerald-300 text-emerald-800 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200" 
     : "bg-white border-stone-200 text-stone-800 dark:border-white/10 dark:bg-white/5 dark:text-white";
@@ -102,28 +101,29 @@ export default function PlayPage({ params }: PageProps) {
   }
 
   const formatContent = (content: string) => {
-    // 1. AI가 혹시나 뱉은 생각 과정 필터링 (첫 번째 태그 등장 이전의 텍스트 무시)
     const match = content.match(/(?:^|\n)[-\d.\s*]*\[?(캐릭터 소개|당신의 상황|상태변화|다음상황|예시명령|시간의 흐름|결과)\]?:?/);
     let cleaned = match ? content.substring(match.index || 0) : content;
 
-    // 2. 태그 앞의 숫자(1. 2.), 대시(-), 별(*) 제거하여 깔끔하게 통일
     cleaned = cleaned.replace(/(?:^|\n)[-\d.\s*]*\[?(캐릭터 소개|당신의 상황|상태변화|다음상황|예시명령|시간의 흐름|결과)\]?:?/g, "\n$1:");
 
-    // 3. UI 렌더링
+    // 상태변화를 숨기지 않고 아름다운 블록으로 렌더링하도록 변경
     return cleaned
       .replace(/캐릭터 소개:/g, "👤 **프로필**\n")
-      .replace(/시간의 흐름:/g, "⏳ **시간이 흘러...**\n")
       .replace(/결과:/g, "📝 **결과**\n")
+      .replace(/상태변화:(.*)/g, "\n📊 **스탯 변화**:$1\n") 
       .replace(/당신의 상황:/g, "🎬 **당신의 상황**\n")
-      .replace(/상태변화:.*\n?/g, "") // 상태변화 본문 텍스트 완전 숨김
+      .replace(/시간의 흐름:/g, "\n⏳ **시간이 흘러...**\n")
       .replace(/다음상황:/g, "\n📍 **다음 상황**\n")
       .replace(/예시명령:/g, "\n💡 **명령예시**\n")
       .trim();
   };
 
+  let turnCount = 0; // 턴 인덱스 계산용 변수
+
   return (
     <main className="mx-auto max-w-md p-4 pb-32 min-h-screen flex flex-col">
-      <div className="sticky top-[56px] z-10 bg-stone-50/95 dark:bg-zinc-950/95 backdrop-blur border-b border-stone-200 dark:border-white/5 p-3 rounded-xl mb-4 shadow-sm transition-colors">
+      {/* 고정된 ThemeHeader 아래에 찰싹 붙도록 top-0으로 유지 (부모가 spacer 역할을 해줌) */}
+      <div className="sticky top-0 z-10 bg-stone-50/95 dark:bg-zinc-950/95 backdrop-blur border-b border-stone-200 dark:border-white/5 p-3 rounded-xl mb-4 shadow-sm transition-colors">
         {valuesSummary && (
           <div className="text-[11px] text-stone-600 dark:text-emerald-300/80 text-center mb-2 font-medium tracking-wide">
             가치관: {valuesSummary}
@@ -141,6 +141,8 @@ export default function PlayPage({ params }: PageProps) {
       <div className="space-y-4 flex-1">
         {messages.map((m, i) => {
           const isUser = m.role === "user";
+          if (isUser) turnCount++; // 유저 메시지일 때만 턴 수 증가
+
           return (
             <div key={i} className={`rounded-2xl p-4 border shadow-sm transition-colors ${
               isUser 
@@ -148,7 +150,7 @@ export default function PlayPage({ params }: PageProps) {
               : "mr-8 bg-emerald-50/80 border-emerald-100 text-stone-800 dark:bg-emerald-500/5 dark:border-emerald-500/10 dark:text-zinc-200"
             }`}>
               <div className="text-[10px] font-bold text-stone-400 dark:text-zinc-500 mb-1 uppercase tracking-wide">
-                {isUser ? "Player" : "GM"}
+                {isUser ? `Player (Turn ${turnCount})` : "GM"}
               </div>
               
               {!isUser && (

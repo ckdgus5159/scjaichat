@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export default function ThemeHeader() {
-  const [isDark, setIsDark] = useState(false); // 초기 렌더링을 위해 기본값 false 설정
+  const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
     // 클라이언트 마운트 후 로컬 스토리지 확인하여 상태 동기화
@@ -31,26 +31,22 @@ export default function ThemeHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-stone-200 dark:border-white/10 bg-stone-50/90 dark:bg-zinc-950/90 backdrop-blur transition-colors duration-300">
-      <div className="mx-auto max-w-md px-4 py-3 flex items-center justify-between">
-        <Link href="/" className="font-semibold tracking-tight text-emerald-600 dark:text-emerald-400">
-          Drama Chat
-        </Link>
-        <div className="flex gap-2">
+    <>
+      <header className="fixed top-0 left-0 right-0 z-50 border-b border-stone-200 dark:border-white/10 bg-stone-50/95 dark:bg-zinc-950/95 backdrop-blur transition-colors duration-300">
+        <div className="mx-auto max-w-md px-4 py-3 flex items-center justify-between">
+          <Link href="/" className="font-semibold tracking-tight text-emerald-600 dark:text-emerald-400">
+            Drama Chat
+          </Link>
           <button
             onClick={toggleTheme}
             className="text-[11px] font-medium text-stone-600 dark:text-zinc-300 border border-stone-300 dark:border-white/10 rounded-full px-3 py-1.5 hover:bg-stone-200 dark:hover:bg-white/5 transition-colors"
           >
             {isDark ? "☀️ 일반모드" : "🌙 나이트모드"}
           </button>
-          <Link
-            href="/"
-            className="text-[11px] font-medium text-stone-600 dark:text-zinc-300 border border-stone-300 dark:border-white/10 rounded-full px-3 py-1.5 hover:bg-stone-200 dark:hover:bg-white/5 transition-colors"
-          >
-            메인으로
-          </Link>
         </div>
-      </div>
-    </header>
+      </header>
+      {/* Fixed 헤더로 인해 가려지는 영역을 방지하는 투명 스페이서 */}
+      <div className="h-[52px]"></div>
+    </>
   );
 }

@@ -9,7 +9,7 @@
   }
 }
 
-html,
-body {
-  height: 100%;
+/* body, html의 높이 강제 고정을 해제하여 sticky/fixed가 정상 작동하게 합니다. */
+html, body {
+  min-height: 100vh;
 }

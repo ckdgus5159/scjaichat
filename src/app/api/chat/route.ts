@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { supabaseServerWithAnon } from "@/lib/supabaseServer";
 import { getGeminiClient, GEMINI_MODEL } from "@/lib/gemini";
 
-// ✅ 개선된 파싱 함수: 전체 텍스트에서 안전하게 수치만 추출 (줄바꿈 오류 해결)
 function parseStatDeltas(aiText: string) {
   const extract = (name: string) => {
     const reg = new RegExp(`${name}\\s*[:]?\\s*([+-]?\\d+)`);
@@ -65,27 +64,42 @@ export async function POST(req: Request) {
   const ai = getGeminiClient();
   const summary = game.values_profile?.summaryKo || "행복을 추구합니다.";
   
+  // ✅ 현재 스탯 상태를 분석하여 AI에게 경고/보상 이벤트 부여
+  const st = { 경제: game.money, 관계: game.relationship, 평판: game.reputation, 건강: game.health };
+  let crits = [], warns = [], buffs = [];
+  for (const [k, v] of Object.entries(st)) {
+    if (v <= 20) crits.push(k);
+    else if (v <= 25) warns.push(k);
+    if (v >= 80) buffs.push(k);
+  }
+
+  let statConditions = "";
+  if (crits.length > 0) statConditions += `\n- [치명적 위기]: ${crits.join(', ')} 수치가 20 이하로 매우 위험하다. 다음상황에 반드시 이와 관련된 부정적인 사건/사고를 발생시켜라.`;
+  if (warns.length > 0) statConditions += `\n- [위험 경고]: ${warns.join(', ')} 수치가 25 근처로 위태롭다. 다음상황에 불안한 조짐을 슬쩍 언질하라.`;
+  if (buffs.length > 0) statConditions += `\n- [긍정적 보상]: ${buffs.join(', ')} 수치가 80 이상으로 매우 높다. 다음상황에 이로 인한 큰 이득이나 긍정적 기회를 제공하라.`;
+
   const prompt = `
 너는 인생 시뮬레이션의 마스터(GM)다.
 플레이어 가치관 요약: ${summary}
 
 [절대 규칙 - 무조건 준수]
-1. 너의 사고 과정(thought)은 절대 노출하지 마라. 대괄호 태그로만 응답하라.
-2. 플레이어의 행동이 현실성이 없거나, 자신의 가치관과 명백히 어긋난다면 "행동 실패"로 처리하고 페널티를 주어라.
-3. 스탯 변동: 피로, 무리수, 손해 발생 시 '경제, 관계, 평판, 건강' 스탯을 확실히 하락(-3 ~ -10)시켜라.
-4. '행복' 스탯은 떨어질 땐 소폭(-1 ~ -2), 올바른 선택엔 대폭(+3 ~ +5) 주어 우상향하게 만들어라.
+1. 플레이어의 행동이 터무니없거나 가치관과 명백히 어긋난다면 "행동 실패"로 처리하고 페널티를 주어라.
+2. '행복' 스탯은 안 좋은 상황에선 조금(-1 ~ -2), 올바른 선택엔 크게(+3 ~ +5) 주어 우상향하게 만들어라.
+3. 너의 사고 과정(thought)은 절대 노출하지 마라.
+4. 숫자(1. 2.)나 기호(-) 없이 대괄호 태그만 써라.
+${statConditions}
 
 [출력 양식]
 ${isTimeSkip ? 
 `이번 턴은 타임스킵 이벤트다.
-[시간의 흐름]: 1~5년의 시간이 흘렀음을 알리고 변화 묘사.
-[결과]: 방금 전 행동에 대한 결과 (실패 시 실패 묘사).
-[상태변화]: 스탯 증감 (예: 경제 -3, 관계 +5...)
+[결과]: 행동의 결과 (가치관 위배 시 실패 묘사).
+[상태변화]: 스탯 증감 (예: 경제 -3, 관계 +5, 행복 +2)
+[시간의 흐름]: 1~5년의 시간이 흘렀음을 알리고 환경 변화 묘사.
 [다음상황]: 새로운 시간대에서 마주한 사건.
 [예시명령]: (1) (2) (3) 형식의 짧은 한 줄 제안.` 
 : 
-`[결과]: 행동에 대한 결과 (실패 시 실패 묘사).
-[상태변화]: 스탯 증감 (예: 경제 +2, 관계 -4...)
+`[결과]: 행동의 결과 (가치관 위배 시 실패 묘사).
+[상태변화]: 스탯 증감 (예: 경제 +2, 관계 -4, 행복 +3)
 [다음상황]: 이어서 발생한 위기.
 [예시명령]: (1) (2) (3) 형식의 짧은 한 줄 제안.`}
 `.trim();
