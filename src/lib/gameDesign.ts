@@ -143,8 +143,8 @@ export function buildValuesProfile(answers: SetupAnswer[]): ValuesProfile {
   const v2 = VALUE_KO[topValues[1]];
   const v3 = VALUE_KO[topValues[2]];
 
-  // ✅ 비유법을 활용한 가치관 한 줄 요약
-  const summaryKo = `당신은 '${v1}'(을)를 마음의 닻으로 삼고, '${v2}'와(과) '${v3}'(을)를 원동력 삼아 묵묵히 인생의 파도를 헤쳐 나가는 사람.`;
+  // 다시 담백한 문장으로 복구
+  const summaryKo = `당신이 생각하는 행복은 주로 ${v1}, ${v2}, ${v3} 쪽에서 자주 올라옵니다.`;
 
   return { weights: sum, topValues, summaryKo };
 }
