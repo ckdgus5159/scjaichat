@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
-/* Tailwind v4 클래스 기반 다크모드 활성화 */
-@variant dark (&:where(.dark, .dark *));
+/* Tailwind v4 클래스 기반 다크모드 커스텀 활성화 */
+@custom-variant dark (&:is(.dark *));
 
 @layer utilities {
   .text-balance {
