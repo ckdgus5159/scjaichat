@@ -23,7 +23,10 @@ export type ValuesProfile = {
 
 export type Protagonist = {
   tone: "warm" | "dry" | "poetic";
-  ageBand: "20s" | "30s" | "40s";
+  ageBand: "teen" | "20s" | "30s" | "40s"; // 'teen' 추가
+  gender: "male" | "female" | "other";    // 성별 추가
+  occupation: "highschool" | "student" | "worker"; // 신분 추가
+  subInfo: string; // 학과, 학교명, 직종 등 상세정보
   dayJob: string;
   oneLine: string;
 };
