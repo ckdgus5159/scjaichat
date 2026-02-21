@@ -9,6 +9,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
+    // suppressHydrationWarning을 통해 클라이언트/서버 테마 차이 경고 방지
     <html lang="ko" suppressHydrationWarning>
       <head>
         <script

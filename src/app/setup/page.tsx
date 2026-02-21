@@ -82,10 +82,23 @@ export default function SetupPage() {
 
   if (isAnyLoading) {
     return (
-      <main className="fixed inset-0 z-50 bg-stone-50 dark:bg-zinc-950 flex flex-col items-center justify-center transition-colors">
+      <main className="fixed inset-0 z-50 bg-stone-50 dark:bg-zinc-950 flex flex-col items-center justify-center transition-colors px-6">
         <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-6 shadow-sm dark:shadow-[0_0_15px_rgba(16,185,129,0.5)]"></div>
-        <h2 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 animate-pulse tracking-widest mb-2">당신만의 세계를 구축하는 중</h2>
-        <p className="text-sm text-stone-500 dark:text-zinc-500">가치관 분석 및 AI 시나리오 초기화가 진행되고 있습니다.</p>
+        <h2 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 animate-pulse tracking-widest mb-8">당신만의 세계를 구축하는 중...</h2>
+        
+        {/* 게임 가이드라인 패널 */}
+        <div className="bg-white/90 dark:bg-black/40 p-6 rounded-2xl border border-stone-200 dark:border-white/10 max-w-sm w-full text-left space-y-4 shadow-lg">
+          <h3 className="font-bold text-stone-800 dark:text-zinc-200 text-sm border-b border-stone-200 dark:border-white/10 pb-2">💡 게임 진행 안내</h3>
+          <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
+            <span className="mr-1">⏳</span> <strong>시간의 흐름:</strong> 매 5턴 마다 1~5년의 시간이 큰 폭으로 도약합니다.
+          </p>
+          <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
+            <span className="mr-1">⚖️</span> <strong>가치관 반영:</strong> 가치관과 맞지 않는 행동을 지시하면 AI의 판단 하에 <strong>실패 및 페널티</strong>가 발생할 수 있습니다.
+          </p>
+          <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
+            <span className="mr-1">🏆</span> <strong>엔딩 조건:</strong> 시련을 극복하고 <strong>행복 스탯이 100</strong>에 도달하면 게임이 종료되며 자서전이 완성됩니다.
+          </p>
+        </div>
       </main>
     );
   }

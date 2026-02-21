@@ -2,24 +2,20 @@ import { NextResponse } from "next/server";
 import { supabaseServerWithAnon } from "@/lib/supabaseServer";
 import { getGeminiClient, GEMINI_MODEL } from "@/lib/gemini";
 
-// AI가 반환한 텍스트에서 상태변화 수치를 추출
+// ✅ 개선된 파싱 함수: 전체 텍스트에서 안전하게 수치만 추출 (줄바꿈 오류 해결)
 function parseStatDeltas(aiText: string) {
-  let deltas = { money: 0, relationship: 0, reputation: 0, health: 0, happiness: 0 };
-  const statMatch = aiText.match(/상태변화[:\s]*([^\\n\[]*)/);
-  if (statMatch) {
-    const sText = statMatch[1];
-    const extract = (name: string) => {
-      const reg = new RegExp(`${name}\\s*([+-]?\\d+)`);
-      const m = sText.match(reg);
-      return m ? parseInt(m[1], 10) : 0;
-    };
-    deltas.money = extract('경제');
-    deltas.relationship = extract('관계');
-    deltas.reputation = extract('평판');
-    deltas.health = extract('건강');
-    deltas.happiness = extract('행복');
-  }
-  return deltas;
+  const extract = (name: string) => {
+    const reg = new RegExp(`${name}\\s*[:]?\\s*([+-]?\\d+)`);
+    const m = aiText.match(reg);
+    return m ? parseInt(m[1], 10) : 0;
+  };
+  return {
+    money: extract('경제'),
+    relationship: extract('관계'),
+    reputation: extract('평판'),
+    health: extract('건강'),
+    happiness: extract('행복')
+  };
 }
 
 export async function GET(req: Request) {
@@ -59,12 +55,10 @@ export async function POST(req: Request) {
   const { data: game } = await supabase.from("games").select("*").eq("id", gameId).single();
   if (!game) return new NextResponse("Game not found", { status: 404 });
 
-  // 유저 메시지 먼저 저장
   await supabase.from("messages").insert({ game_id: gameId, user_id: userData.user.id, role: "user", content: userText });
 
   const { data: msgs } = await supabase.from("messages").select("role, content").eq("game_id", gameId).order("created_at", { ascending: true });
   
-  // 5턴째인지 확인 (타임스킵 로직)
   const turnCount = msgs?.filter(m => m.role === "user").length || 1;
   const isTimeSkip = turnCount % 5 === 0;
 
@@ -75,49 +69,39 @@ export async function POST(req: Request) {
 너는 인생 시뮬레이션의 마스터(GM)다.
 플레이어 가치관 요약: ${summary}
 
-[절대 금지 사항]
-1. 절대로 너의 생각 과정(thought, context 분석 등)을 출력하지 마라.
-2. 각 블록 앞에 '1.', '2.', '-' 같은 숫자나 기호를 붙이지 마라. 대괄호 [ ] 태그만 사용하라.
-
-[스탯 변동 알고리즘 - 엄격 적용]
-- 사용자의 선택이 손해나 피로를 유발하면 '경제, 관계, 평판, 건강' 스탯을 반드시 하락(-3 ~ -10)시켜라.
-- '행복' 스탯은 떨어질 때는 조금(-1 ~ -2), 오를 때는 크게(+3 ~ +5) 주어 우상향하게 만들어라.
+[절대 규칙 - 무조건 준수]
+1. 너의 사고 과정(thought)은 절대 노출하지 마라. 대괄호 태그로만 응답하라.
+2. 플레이어의 행동이 현실성이 없거나, 자신의 가치관과 명백히 어긋난다면 "행동 실패"로 처리하고 페널티를 주어라.
+3. 스탯 변동: 피로, 무리수, 손해 발생 시 '경제, 관계, 평판, 건강' 스탯을 확실히 하락(-3 ~ -10)시켜라.
+4. '행복' 스탯은 떨어질 땐 소폭(-1 ~ -2), 올바른 선택엔 대폭(+3 ~ +5) 주어 우상향하게 만들어라.
 
 [출력 양식]
 ${isTimeSkip ? 
-`이번 턴은 타임스킵 이벤트다. 아래 5블록을 지켜라.
+`이번 턴은 타임스킵 이벤트다.
 [시간의 흐름]: 1~5년의 시간이 흘렀음을 알리고 변화 묘사.
-[결과]: 방금 전 사용자의 선택에 대한 최종 결과.
-[상태변화]: 스탯의 증감 내역 (예: 경제 -3, 관계 +5...)
-[다음상황]: 새로운 나이/시간대에서 마주한 사건.
-[예시명령]: (1) (2) (3) (따옴표 없이 깔끔한 한 문장으로 작성)` 
+[결과]: 방금 전 행동에 대한 결과 (실패 시 실패 묘사).
+[상태변화]: 스탯 증감 (예: 경제 -3, 관계 +5...)
+[다음상황]: 새로운 시간대에서 마주한 사건.
+[예시명령]: (1) (2) (3) 형식의 짧은 한 줄 제안.` 
 : 
-`아래 4블록을 지켜라.
-[결과]: 사용자 선택에 대한 결과.
-[상태변화]: 스탯의 증감 내역 (예: 경제 +2, 관계 -4...)
-[다음상황]: 이어서 발생한 위기나 상황.
-[예시명령]: (1) (2) (3) (따옴표 없이 깔끔한 한 문장으로 작성)`}
+`[결과]: 행동에 대한 결과 (실패 시 실패 묘사).
+[상태변화]: 스탯 증감 (예: 경제 +2, 관계 -4...)
+[다음상황]: 이어서 발생한 위기.
+[예시명령]: (1) (2) (3) 형식의 짧은 한 줄 제안.`}
 `.trim();
 
-  // 기존 대화 내역 (history) 구성
   const history = msgs?.slice(-6).map(m => ({
     role: m.role === "user" ? "user" : "model",
     parts: [{ text: m.content }]
   })) || [];
 
-  // 새 요청 (history + 새로운 prompt 합치기)
   const contents = [
     ...history,
     { role: "user" as const, parts: [{ text: prompt + `\n\n최신 사용자 행동: ${userText}` }] }
   ];
 
   try {
-    // startChat 대신 generateContent를 사용하여 전체 대화 내역을 한 번에 전달
-    const resp = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: contents
-    });
-    
+    const resp = await ai.models.generateContent({ model: GEMINI_MODEL, contents });
     const aiText = resp.text || "";
     const deltas = parseStatDeltas(aiText);
 
