@@ -52,13 +52,11 @@ export default function PlayPage({ params }: PageProps) {
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   
-  // 피드백 팝업 상태
   const [showFeedbackPopup, setShowFeedbackPopup] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages.length, loading, sending]);
 
-  // ✅ 행복도 100(엔딩) 달성 시 1.5초 후 인생 요약 페이지로 이동
   useEffect(() => {
     if (status === "finished") {
       const timer = setTimeout(() => { router.push(`/summary/${gameId}`); }, 1500);
@@ -108,7 +106,6 @@ export default function PlayPage({ params }: PageProps) {
       const latestStats = { ...mergeStats({} as any, data.stats), happiness: clamp01to100(data.happiness) };
       setMessages(prev => [...prev, { role: "assistant", content: data.assistantText || "오류", stats: latestStats }]);
 
-      // ✅ 8턴째 피드백 팝업 트리거
       const userTurns = messages.filter(m => m.role === "user").length + 1;
       const hasSeenPopup = localStorage.getItem(`feedback_shown_${gameId}`);
       if (userTurns === 8 && !hasSeenPopup) {
@@ -143,7 +140,6 @@ export default function PlayPage({ params }: PageProps) {
   return (
     <main className="mx-auto max-w-md p-4 pb-32 min-h-screen flex flex-col relative">
       
-      {/* ✅ 피드백 팝업 모달 */}
       {showFeedbackPopup && (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-2xl max-w-sm w-full text-center space-y-4">
@@ -220,8 +216,9 @@ export default function PlayPage({ params }: PageProps) {
 
       <div className="fixed bottom-0 left-0 right-0 bg-stone-50/95 dark:bg-zinc-950/95 backdrop-blur border-t border-stone-200 dark:border-white/10 transition-colors z-40">
         <div className="mx-auto max-w-md p-3 flex gap-2">
+          {/* ✅ 플레이스홀더 텍스트 변경 적용 */}
           <input className="flex-1 rounded-xl bg-white border border-stone-200 text-stone-900 px-4 py-3 outline-none focus:border-emerald-500 dark:bg-white/5 dark:border-white/10 dark:text-zinc-50"
-            placeholder={status === "finished" ? "엔딩을 준비 중입니다..." : "행동 입력 (치트키: //엔딩)"}
+            placeholder={status === "finished" ? "엔딩을 준비 중입니다..." : "행동 입력"}
             value={input} onChange={(e) => setInput(e.target.value)} disabled={sending || status === "finished"} 
             onKeyDown={(e) => { if (e.key === "Enter") send(); }} />
           <button className="rounded-xl bg-emerald-500 text-white dark:bg-emerald-400 px-5 py-3 dark:text-zinc-950 font-bold disabled:opacity-40"

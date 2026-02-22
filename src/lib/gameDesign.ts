@@ -143,8 +143,8 @@ export function buildValuesProfile(answers: SetupAnswer[]): ValuesProfile {
   const v2 = VALUE_KO[topValues[1]];
   const v3 = VALUE_KO[topValues[2]];
 
-  // 다시 담백한 문장으로 복구
-  const summaryKo = `당신이 생각하는 행복은 주로 ${v1}, ${v2}, ${v3} 쪽에서 자주 올라옵니다.`;
+  // ✅ 자연스러운 선호도 문장으로 수정
+  const summaryKo = `당신은 '${v1}', '${v2}', '${v3}'을(를) 추구하고 선호하는 사람입니다.`;
 
   return { weights: sum, topValues, summaryKo };
 }

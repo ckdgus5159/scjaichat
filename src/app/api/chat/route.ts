@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServerWithAnon } from "@/lib/supabaseServer";
 import { getGeminiClient, GEMINI_MODEL } from "@/lib/gemini";
 
+// ✅ parseInt를 사용해 무조건 정수 형태로 스탯을 추출합니다.
 function parseStatDeltas(aiText: string) {
   const extract = (name: string) => {
     const reg = new RegExp(`${name}\\s*[:]?\\s*([+-]?\\d+)`);
@@ -54,7 +55,6 @@ export async function POST(req: Request) {
   const { data: game } = await supabase.from("games").select("*").eq("id", gameId).single();
   if (!game) return new NextResponse("Game not found", { status: 404 });
 
-  // ✅ 디버그 명령어 처리 (즉시 엔딩)
   if (userText.trim() === "//엔딩") {
     await supabase.from("messages").insert({ game_id: gameId, user_id: userData.user.id, role: "user", content: "//엔딩 명령어 입력" });
     const endText = "[결과]: 치트키가 활성화되었습니다.\n[상태변화]: 행복 +100\n[다음상황]: 모든 시련을 이겨내고 대학 생활을 성공적으로 마무리했습니다. 곧 인생 요약 페이지로 이동합니다.\n[예시명령]: (1) 자서전 확인하기";
@@ -78,7 +78,6 @@ export async function POST(req: Request) {
   const ai = getGeminiClient();
   const summary = game.values_profile?.summaryKo || "행복을 추구합니다.";
 
-  // ✅ 프롬프트 강화: 힐링 + 현실적인 긴장감/갈등 추가
   const prompt = `
 너는 인생 시뮬레이션의 마스터(GM)다. 주인공은 평범한 대학생이다.
 플레이어 가치관: ${summary}
@@ -88,7 +87,8 @@ export async function POST(req: Request) {
 2. 너무 평탄하고 행복한 전개만 반복하지 마라! 프로젝트 무임승차, 갑작스런 지출, 가족또는 연인간의 갈등 등 '현실적인 긴장감과 스트레스 요소'를 중간중간 반드시 발생시켜라.
 3. 하지만 파산, 중증 질환, 부모의 소송 등 극단적이고 암울한 막장 드라마 전개는 피하고, '극복 가능한 일상적 시련'으로 수위를 조절하라.
 4. 행복 스탯만은 하락 시 다른 스탯보다 덜 하향되도록 해라.
-5. 숫자(1. 2.)나 기호(-) 없이 대괄호 [ ] 태그만 써라.
+5. 스탯의 증감 내역은 무조건 소수점이 없는 '정수' 형태로만 표기하라. (예: +3, -2)
+6. 숫자(1. 2.)나 기호(-) 없이 대괄호 [ ] 태그만 써라.
 
 [출력 양식]
 ${isTimeSkip ? 
@@ -121,7 +121,9 @@ ${isTimeSkip ?
     const aiText = resp.text || "";
     const deltas = parseStatDeltas(aiText);
 
-    const clamp = (v: number) => Math.max(0, Math.min(100, v));
+    // ✅ 여기서 Math.round를 추가로 씌워 확실하게 정수값만 DB에 저장되도록 강제합니다.
+    const clamp = (v: number) => Math.round(Math.max(0, Math.min(100, v)));
+    
     const newStats = {
       money: clamp(game.money + deltas.money),
       relationship: clamp(game.relationship + deltas.relationship),

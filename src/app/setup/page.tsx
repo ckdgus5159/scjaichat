@@ -58,7 +58,6 @@ export default function SetupPage() {
       const baseProto = buildProtagonist(answers);
       const finalMbti = `${mbti.eI}${mbti.sN}${mbti.tF}${mbti.jP}`;
 
-      // ✅ 타입스크립트 오류 해결: ageBand와 gender를 기존 타입에 맞게 매핑
       const finalProtagonist: Protagonist = {
         ...baseProto,
         ageBand: parseInt(age) >= 30 ? "30대" : "20대",
@@ -91,6 +90,21 @@ export default function SetupPage() {
       <main className="fixed inset-0 z-50 bg-stone-50 dark:bg-zinc-950 flex flex-col items-center justify-center transition-colors px-6">
         <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-6 shadow-sm dark:shadow-[0_0_15px_rgba(16,185,129,0.5)]"></div>
         <h2 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 animate-pulse tracking-widest mb-8">당신만의 세계를 구축하는 중...</h2>
+        
+        {/* ✅ 다시 복구된 게임 가이드라인 패널 */}
+        <div className="bg-white/90 dark:bg-black/40 p-6 rounded-2xl border border-stone-200 dark:border-white/10 max-w-sm w-full text-left space-y-4 shadow-lg">
+          <h3 className="font-bold text-stone-800 dark:text-zinc-200 text-sm border-b border-stone-200 dark:border-white/10 pb-2">💡 게임 진행 안내</h3>
+          <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
+            <span className="mr-1">⏳</span> <strong>시간의 흐름:</strong> 5번의 턴(행동)마다 시간이 큰 폭으로 도약합니다.
+          </p>
+          <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
+            <span className="mr-1">⚖️</span> <strong>가치관 반영:</strong> 가치관과 맞지 않는 터무니없는 행동은 AI의 판단 하에 <strong>실패 및 페널티</strong>를 받을 수 있습니다.
+          </p>
+          <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
+            <span className="mr-1">🏆</span> <strong>엔딩 조건:</strong> 시련을 극복하고 <strong>행복 스탯이 100</strong>에 도달하면 게임이 종료되며 자서전이 완성됩니다.
+          </p>
+        </div>
+
       </main>
     );
   }

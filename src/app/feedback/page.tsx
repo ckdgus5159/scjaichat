@@ -24,7 +24,7 @@ export default function FeedbackPage() {
 
       if (error) throw error;
 
-      alert("소중한 의견 정말 감사합니다!\n보내주신 피드백은 더 나은 서비스를 만드는 데 큰 힘이 됩니다.\n커피 쿠폰 당첨 시 남겨주신 번호로 연락드리겠습니다.");
+      alert("소중한 의견 정말 감사합니다!\n보내주신 피드백은 더 나은 서비스를 만드는 데 큰 힘이 됩니다.");
       router.push("/");
     } catch (error) {
       console.error("피드백 전송 오류:", error);

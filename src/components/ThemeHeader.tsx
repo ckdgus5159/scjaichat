@@ -47,7 +47,7 @@ export default function ThemeHeader() {
               onClick={toggleTheme}
               className="text-[11px] font-medium text-stone-600 dark:text-zinc-300 border border-stone-300 dark:border-white/10 rounded-full px-3 py-1.5 hover:bg-stone-200 dark:hover:bg-white/5 transition-colors"
             >
-              {isDark ? "☀️" : "🌙"}
+              {isDark ? "☀️테마변경" : "🌙테마변경"}
             </button>
           </div>
         </div>
