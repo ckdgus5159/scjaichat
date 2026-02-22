@@ -95,7 +95,8 @@ export default function Home() {
   }
 
   return (
-    <main className="mx-auto max-w-md p-6 flex flex-col justify-center min-h-[80vh]">
+    // ✅ justify-center를 빼고 pt-24(상단 패딩)를 추가하여 위쪽으로 끌어올렸습니다.
+    <main className="mx-auto max-w-md p-6 flex flex-col pt-24 min-h-screen">
       <h1 className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">Drama Chat</h1>
       <p className="mt-3 text-stone-600 dark:text-zinc-300 leading-relaxed text-sm">
         당신의 가치관과 선택으로 대학 생활의 희로애락을 경험해보세요. AI와 함께 당신만의 현실 밀착형 캠퍼스 라이프를 만들어갑니다.
