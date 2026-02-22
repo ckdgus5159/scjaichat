@@ -14,14 +14,19 @@ export default function SetupPage() {
   const [forceLoading, setForceLoading] = useState(false);
 
   const [showProfileInput, setShowProfileInput] = useState(false);
-  const [protoState, setProtoState] = useState<Partial<Protagonist>>({
-    ageBand: "20대", gender: "female", occupation: "student", subInfo: "", tone: "warm"
-  });
+  
+  // 대학생 전용 상태 관리
+  const [age, setAge] = useState("20");
+  const [year, setYear] = useState("1");
+  const [major, setMajor] = useState("");
+  const [gender, setGender] = useState("남성");
+  const [mbti, setMbti] = useState({ eI: "", sN: "", tF: "", jP: "" });
 
   const q = QUESTIONS[step];
   const answers = useMemo(() => Object.values(picked), [picked]);
   const done = answers.length === QUESTIONS.length;
   const isLast = step === QUESTIONS.length - 1;
+  const isMbtiComplete = mbti.eI && mbti.sN && mbti.tF && mbti.jP;
 
   useEffect(() => {
     const handle = localStorage.getItem("dc_handle") || "";
@@ -51,16 +56,17 @@ export default function SetupPage() {
 
       const valuesProfile = buildValuesProfile(answers);
       const baseProto = buildProtagonist(answers);
+      const finalMbti = `${mbti.eI}${mbti.sN}${mbti.tF}${mbti.jP}`;
 
+      // ✅ 타입스크립트 오류 해결: ageBand와 gender를 기존 타입에 맞게 매핑
       const finalProtagonist: Protagonist = {
         ...baseProto,
-        ageBand: protoState.ageBand as any,
-        gender: protoState.gender as any,
-        occupation: protoState.occupation as any,
-        subInfo: protoState.subInfo || "",
-        dayJob: protoState.occupation === "highschool" ? `${protoState.subInfo} 고등학생` : 
-                protoState.occupation === "student" ? `${protoState.subInfo} 대학생` : `${protoState.subInfo} 직장인`,
-        oneLine: `${protoState.ageBand} ${protoState.occupation === "highschool" ? "고등학생" : protoState.occupation === "student" ? "대학생" : "직장인"}의 이야기.`
+        ageBand: parseInt(age) >= 30 ? "30대" : "20대",
+        gender: gender === "남성" ? "male" : "female",
+        occupation: "student",
+        subInfo: `${major} ${year}학년`,
+        dayJob: "대학생",
+        oneLine: `${age}세 ${gender}, ${major} ${year}학년 (${finalMbti}) 대학생의 이야기.`
       };
 
       const r = await fetch("/api/game/start", {
@@ -85,54 +91,59 @@ export default function SetupPage() {
       <main className="fixed inset-0 z-50 bg-stone-50 dark:bg-zinc-950 flex flex-col items-center justify-center transition-colors px-6">
         <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-6 shadow-sm dark:shadow-[0_0_15px_rgba(16,185,129,0.5)]"></div>
         <h2 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 animate-pulse tracking-widest mb-8">당신만의 세계를 구축하는 중...</h2>
-        
-        {/* 게임 가이드라인 패널 */}
-        <div className="bg-white/90 dark:bg-black/40 p-6 rounded-2xl border border-stone-200 dark:border-white/10 max-w-sm w-full text-left space-y-4 shadow-lg">
-          <h3 className="font-bold text-stone-800 dark:text-zinc-200 text-sm border-b border-stone-200 dark:border-white/10 pb-2">💡 게임 진행 안내</h3>
-          <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
-            <span className="mr-1">⏳</span> <strong>시간의 흐름:</strong> 매 5턴 마다 1~5년의 시간이 큰 폭으로 도약합니다.
-          </p>
-          <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
-            <span className="mr-1">⚖️</span> <strong>가치관 반영:</strong> 가치관과 맞지 않는 행동을 지시하면 AI의 판단 하에 <strong>실패 및 페널티</strong>가 발생할 수 있습니다.
-          </p>
-          <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
-            <span className="mr-1">🏆</span> <strong>엔딩 조건:</strong> 시련을 극복하고 <strong>행복 스탯이 100</strong>에 도달하면 게임이 종료되며 자서전이 완성됩니다.
-          </p>
-        </div>
       </main>
     );
   }
 
   if (done && showProfileInput) {
     return (
-      <main className="mx-auto max-w-md p-6 min-h-[80vh] flex flex-col justify-center">
-        <h2 className="text-xl font-bold mb-6 text-emerald-600 dark:text-emerald-400">캐릭터 정보 입력</h2>
-        <div className="space-y-6 bg-white border border-stone-200 dark:bg-white/5 p-6 rounded-3xl dark:border-white/10 shadow-md transition-colors">
+      <main className="mx-auto max-w-md p-6 min-h-[80vh] flex flex-col justify-center pb-20">
+        <h2 className="text-xl font-bold mb-6 text-emerald-600 dark:text-emerald-400">캐릭터 정보 입력 (대학생)</h2>
+        <div className="space-y-5 bg-white border border-stone-200 dark:bg-white/5 p-6 rounded-3xl dark:border-white/10 shadow-md transition-colors">
+          
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <label className="text-xs text-stone-500 dark:text-zinc-400 font-bold uppercase mb-2 block">나이</label>
+              <select value={age} onChange={e => setAge(e.target.value)} className="w-full bg-stone-50 border border-stone-200 text-stone-900 dark:bg-black/40 dark:border-white/10 rounded-xl p-3 outline-none focus:border-emerald-500 dark:text-white">
+                {Array.from({length: 15}, (_, i) => i + 20).map(n => <option key={n} value={n}>{n}세</option>)}
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-stone-500 dark:text-zinc-400 font-bold uppercase mb-2 block">학년</label>
+              <select value={year} onChange={e => setYear(e.target.value)} className="w-full bg-stone-50 border border-stone-200 text-stone-900 dark:bg-black/40 dark:border-white/10 rounded-xl p-3 outline-none focus:border-emerald-500 dark:text-white">
+                {[1,2,3,4].map(n => <option key={n} value={n}>{n}학년</option>)}
+              </select>
+            </div>
+          </div>
+
           <div>
-            <label className="text-xs text-stone-500 dark:text-zinc-500 font-bold uppercase">나이대 및 신분 선택</label>
-            <div className="grid grid-cols-3 gap-2 mt-2">
-              {[
-                { id: "10대", label: "10대 (고등학생)", occ: "highschool" },
-                { id: "20대", label: "20대 (대학생)", occ: "student" },
-                { id: "30대", label: "30대 (직장인)", occ: "worker" }
-              ].map(a => (
-                <button key={a.id} onClick={() => setProtoState({...protoState, ageBand: a.id as any, occupation: a.occ as any})}
-                  className={`py-3 rounded-xl text-xs font-semibold border transition text-center ${protoState.ageBand === a.id ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'border-stone-200 text-stone-600 bg-stone-50 hover:bg-stone-100 dark:border-white/10 dark:text-zinc-400 dark:bg-transparent dark:hover:bg-white/5'}`}>
-                  {a.label}
-                </button>
+            <label className="text-xs text-stone-500 dark:text-zinc-400 font-bold uppercase mb-2 block">성별</label>
+            <div className="grid grid-cols-2 gap-2">
+              {['남성', '여성'].map(g => (
+                <button key={g} onClick={() => setGender(g)} className={`py-3 rounded-xl text-sm font-semibold border transition ${gender === g ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'border-stone-200 text-stone-600 bg-stone-50 dark:border-white/10 dark:text-zinc-400 dark:bg-transparent'}`}>{g}</button>
               ))}
             </div>
           </div>
+
           <div>
-            <label className="text-xs text-stone-500 dark:text-zinc-500 font-bold uppercase">
-              {protoState.occupation === "highschool" ? "계열 입력" : protoState.occupation === "student" ? "학과 입력" : "직무 입력"}
-            </label>
-            <input type="text" value={protoState.subInfo} onChange={(e) => setProtoState({...protoState, subInfo: e.target.value})}
-              placeholder={protoState.occupation === "highschool" ? "예: 문과, 이과, 예체능, 특성화고" : protoState.occupation === "student" ? "예: 경영학과, 컴퓨터공학과" : "예: 기획, 개발, 영업, 디자인"}
-              className="w-full mt-2 bg-stone-50 border border-stone-200 text-stone-900 dark:bg-black/40 dark:border-white/10 rounded-xl p-3 outline-none focus:border-emerald-500 dark:text-white transition-colors" />
+            <label className="text-xs text-stone-500 dark:text-zinc-400 font-bold uppercase mb-2 block">학과 (자유입력)</label>
+            <input type="text" value={major} onChange={(e) => setMajor(e.target.value)} placeholder="예: 컴퓨터공학과, 경영학과" className="w-full bg-stone-50 border border-stone-200 text-stone-900 dark:bg-black/40 dark:border-white/10 rounded-xl p-3 outline-none focus:border-emerald-500 dark:text-white transition-colors" />
           </div>
-          <button className="w-full rounded-xl bg-emerald-500 text-white dark:bg-emerald-400 py-4 dark:text-zinc-950 font-bold disabled:opacity-40"
-            disabled={!protoState.subInfo} onClick={() => startGame({ forceNew: false })}>이 설정으로 드라마 시작</button>
+
+          <div>
+            <label className="text-xs text-stone-500 dark:text-zinc-400 font-bold uppercase mb-2 block">MBTI</label>
+            <div className="grid grid-cols-4 gap-1">
+              {[ {k:'eI', v1:'E', v2:'I'}, {k:'sN', v1:'S', v2:'N'}, {k:'tF', v1:'T', v2:'F'}, {k:'jP', v1:'J', v2:'P'} ].map(pair => (
+                <div key={pair.k} className="flex flex-col gap-1">
+                  <button onClick={() => setMbti({...mbti, [pair.k]: pair.v1})} className={`py-2 rounded-lg text-sm font-bold border transition ${mbti[pair.k as keyof typeof mbti] === pair.v1 ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'border-stone-200 text-stone-500 bg-stone-50 dark:border-white/5 dark:text-zinc-500 dark:bg-black/20'}`}>{pair.v1}</button>
+                  <button onClick={() => setMbti({...mbti, [pair.k]: pair.v2})} className={`py-2 rounded-lg text-sm font-bold border transition ${mbti[pair.k as keyof typeof mbti] === pair.v2 ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'border-stone-200 text-stone-500 bg-stone-50 dark:border-white/5 dark:text-zinc-500 dark:bg-black/20'}`}>{pair.v2}</button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button className="w-full mt-2 rounded-xl bg-emerald-500 text-white dark:bg-emerald-400 py-4 dark:text-zinc-950 font-bold disabled:opacity-40"
+            disabled={!major.trim() || !isMbtiComplete} onClick={() => startGame({ forceNew: false })}>드라마 시작하기</button>
         </div>
       </main>
     );

@@ -2,14 +2,14 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 type Msg = { role: "user" | "assistant"; content: string; stats?: Stats & { happiness?: number } };
 type Stats = { money: number; relationship: number; reputation: number; health: number; };
 type PageProps = { params: Promise<{ gameId: string }>; };
 
-function clamp01to100(n: number) {
-  return Math.max(0, Math.min(100, Math.round(n || 0)));
-}
+function clamp01to100(n: number) { return Math.max(0, Math.min(100, Math.round(n || 0))); }
 
 function mergeStats(prev: Stats, next: any): Stats {
   if (!next) return prev;
@@ -21,7 +21,6 @@ function mergeStats(prev: Stats, next: any): Stats {
   };
 }
 
-// ✅ 스탯 레이아웃 변경: 아이콘(좌측) | 라벨+수치(우측)
 function StatChip(props: { icon: string; label: string; value: number; emphasize?: boolean }) {
   const { icon, label, value, emphasize } = props;
   const v = clamp01to100(value);
@@ -42,6 +41,7 @@ function StatChip(props: { icon: string; label: string; value: number; emphasize
 }
 
 export default function PlayPage({ params }: PageProps) {
+  const router = useRouter();
   const { gameId } = React.use(params);
   const [happiness, setHappiness] = useState(0);
   const [stats, setStats] = useState<Stats>({ money: 50, relationship: 50, reputation: 50, health: 50 });
@@ -51,11 +51,20 @@ export default function PlayPage({ params }: PageProps) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  // 피드백 팝업 상태
+  const [showFeedbackPopup, setShowFeedbackPopup] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages.length, loading, sending]);
+
+  // ✅ 행복도 100(엔딩) 달성 시 1.5초 후 인생 요약 페이지로 이동
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, loading, sending]);
+    if (status === "finished") {
+      const timer = setTimeout(() => { router.push(`/summary/${gameId}`); }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [status, router, gameId]);
 
   useEffect(() => {
     (async () => {
@@ -98,6 +107,14 @@ export default function PlayPage({ params }: PageProps) {
       
       const latestStats = { ...mergeStats({} as any, data.stats), happiness: clamp01to100(data.happiness) };
       setMessages(prev => [...prev, { role: "assistant", content: data.assistantText || "오류", stats: latestStats }]);
+
+      // ✅ 8턴째 피드백 팝업 트리거
+      const userTurns = messages.filter(m => m.role === "user").length + 1;
+      const hasSeenPopup = localStorage.getItem(`feedback_shown_${gameId}`);
+      if (userTurns === 8 && !hasSeenPopup) {
+        setShowFeedbackPopup(true);
+        localStorage.setItem(`feedback_shown_${gameId}`, "true");
+      }
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "서버 응답 오류" }]);
     } finally {
@@ -126,6 +143,23 @@ export default function PlayPage({ params }: PageProps) {
   return (
     <main className="mx-auto max-w-md p-4 pb-32 min-h-screen flex flex-col relative">
       
+      {/* ✅ 피드백 팝업 모달 */}
+      {showFeedbackPopup && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-2xl max-w-sm w-full text-center space-y-4">
+            <h3 className="text-xl font-bold text-emerald-600 dark:text-emerald-400">잠깐! 피드백을 남겨주세요 🎁</h3>
+            <p className="text-sm text-stone-600 dark:text-zinc-300 leading-relaxed">
+              플레이는 재미있으신가요? 더 나은 경험을 위해 여러분의 의견이 필요합니다.<br/>
+              정성스러운 피드백을 주신 <strong>10분께 커피 쿠폰</strong>을 드립니다!
+            </p>
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => setShowFeedbackPopup(false)} className="flex-1 py-3 rounded-xl bg-stone-100 text-stone-600 font-bold dark:bg-white/10 dark:text-zinc-300 hover:bg-stone-200 transition-colors">나중에요</button>
+              <Link href="/feedback" target="_blank" onClick={() => setShowFeedbackPopup(false)} className="flex-1 py-3 rounded-xl bg-emerald-500 text-white font-bold dark:bg-emerald-400 dark:text-zinc-900 shadow-md hover:bg-emerald-600 transition-colors block leading-none flex items-center justify-center">작성하러 가기</Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="sticky top-[52px] z-30 bg-stone-50/95 dark:bg-zinc-950/95 backdrop-blur border-b border-stone-200 dark:border-white/5 p-3 rounded-xl mb-4 shadow-sm transition-colors pt-2">
         {valuesSummary && (
           <div className="text-[11px] text-stone-600 dark:text-emerald-300/80 text-center mb-3 font-medium tracking-wide">
@@ -163,11 +197,7 @@ export default function PlayPage({ params }: PageProps) {
               
               {!isUser && (
                 <div className="mb-3 flex flex-wrap gap-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono border-b border-emerald-200 dark:border-emerald-500/10 pb-1.5 opacity-80">
-                  <span>💰{msgStats.money}</span> 
-                  <span>🤝{msgStats.relationship}</span> 
-                  <span>⭐{msgStats.happiness}</span> 
-                  <span>🏆{msgStats.reputation}</span> 
-                  <span>💪{msgStats.health}</span>
+                  <span>💰{msgStats.money}</span> <span>🤝{msgStats.relationship}</span> <span>⭐{msgStats.happiness}</span> <span>🏆{msgStats.reputation}</span> <span>💪{msgStats.health}</span>
                 </div>
               )}
               <div className="text-sm leading-relaxed whitespace-pre-wrap">{isUser ? m.content : formatContent(m.content)}</div>
@@ -191,7 +221,7 @@ export default function PlayPage({ params }: PageProps) {
       <div className="fixed bottom-0 left-0 right-0 bg-stone-50/95 dark:bg-zinc-950/95 backdrop-blur border-t border-stone-200 dark:border-white/10 transition-colors z-40">
         <div className="mx-auto max-w-md p-3 flex gap-2">
           <input className="flex-1 rounded-xl bg-white border border-stone-200 text-stone-900 px-4 py-3 outline-none focus:border-emerald-500 dark:bg-white/5 dark:border-white/10 dark:text-zinc-50"
-            placeholder={status === "finished" ? "시나리오가 종료되었습니다." : "행동을 입력하세요..."}
+            placeholder={status === "finished" ? "엔딩을 준비 중입니다..." : "행동 입력 (치트키: //엔딩)"}
             value={input} onChange={(e) => setInput(e.target.value)} disabled={sending || status === "finished"} 
             onKeyDown={(e) => { if (e.key === "Enter") send(); }} />
           <button className="rounded-xl bg-emerald-500 text-white dark:bg-emerald-400 px-5 py-3 dark:text-zinc-950 font-bold disabled:opacity-40"

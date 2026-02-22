@@ -54,6 +54,20 @@ export async function POST(req: Request) {
   const { data: game } = await supabase.from("games").select("*").eq("id", gameId).single();
   if (!game) return new NextResponse("Game not found", { status: 404 });
 
+  // ✅ 디버그 명령어 처리 (즉시 엔딩)
+  if (userText.trim() === "//엔딩") {
+    await supabase.from("messages").insert({ game_id: gameId, user_id: userData.user.id, role: "user", content: "//엔딩 명령어 입력" });
+    const endText = "[결과]: 치트키가 활성화되었습니다.\n[상태변화]: 행복 +100\n[다음상황]: 모든 시련을 이겨내고 대학 생활을 성공적으로 마무리했습니다. 곧 인생 요약 페이지로 이동합니다.\n[예시명령]: (1) 자서전 확인하기";
+    
+    await supabase.from("games").update({ happiness: 100, status: "finished" }).eq("id", gameId);
+    await supabase.from("messages").insert({
+      game_id: gameId, user_id: userData.user.id, role: "assistant", content: endText, happiness_delta: 100,
+      meta: { stats: { money: game.money, relationship: game.relationship, reputation: game.reputation, health: game.health, happiness: 100 } }
+    });
+
+    return NextResponse.json({ assistantText: endText, happiness: 100, stats: { money: game.money, relationship: game.relationship, reputation: game.reputation, health: game.health }, status: "finished" });
+  }
+
   await supabase.from("messages").insert({ game_id: gameId, user_id: userData.user.id, role: "user", content: userText });
 
   const { data: msgs } = await supabase.from("messages").select("role, content").eq("game_id", gameId).order("created_at", { ascending: true });
@@ -63,31 +77,18 @@ export async function POST(req: Request) {
 
   const ai = getGeminiClient();
   const summary = game.values_profile?.summaryKo || "행복을 추구합니다.";
-  
-  const st = { 경제: game.money, 관계: game.relationship, 평판: game.reputation, 건강: game.health };
-  let crits = [], warns = [], buffs = [];
-  for (const [k, v] of Object.entries(st)) {
-    if (v <= 20) crits.push(k);
-    else if (v <= 25) warns.push(k);
-    if (v >= 80) buffs.push(k);
-  }
 
-  let statConditions = "";
-  if (crits.length > 0) statConditions += `\n- [주의 요망]: ${crits.join(', ')} 수치가 낮습니다. 하지만 파산, 소송, 죽음 등 극단적인 파국은 절대 피하고, "일시적인 슬럼프, 가벼운 오해, 감기 몸살" 등 일상적이고 극복 가능한 소소한 시련만 주어라.`;
-  if (warns.length > 0) statConditions += `\n- [위험 경고]: ${warns.join(', ')} 수치가 조금 낮습니다. 앞으로 무리하면 안 좋겠다는 불안한 조짐을 슬쩍 언질하라.`;
-  if (buffs.length > 0) statConditions += `\n- [긍정적 보상]: ${buffs.join(', ')} 수치가 높습니다. 일상의 소소하고 따뜻한 기회(우연한 행운, 칭찬, 소소한 수익 등)를 제공하라.`;
-
+  // ✅ 프롬프트 강화: 힐링 + 현실적인 긴장감/갈등 추가
   const prompt = `
-너는 인생 시뮬레이션의 마스터(GM)다.
-플레이어 가치관 요약: ${summary}
+너는 인생 시뮬레이션의 마스터(GM)다. 주인공은 평범한 대학생이다.
+플레이어 가치관: ${summary}
 
-[절대 금지 사항 및 게임 규칙 - 무조건 준수]
-1. 허용된 스탯은 오직 '경제', '관계', '평판', '건강', '행복' 딱 5가지다. 다른 단어는 절대 생성하지 마라.
-2. 억지 위기 조성 금지: 갑자기 대기업 면접에서 하루 전날 코딩테스트 과제가 추가된다거나 하는 '작위적이고 비현실적인 억지 위기'를 절대 주지 마라. 상황은 자연스럽게 흘러가야 한다.
-3. 막장 드라마/절망 금지: 빚더미에 앉거나, 부모가 소송을 걸거나, 중증 질환에 걸려 쓰러지는 등의 심각하고 암울한 전개는 절대 금지한다. 위기가 발생하더라도 해결 가능해야한다.
-4. 행복 스탯만은 하락 시 조금씩만(-1 ~ -4) 깎아라.
-5. 절대로 너의 생각 과정(thought)을 출력하지 말라.
-${statConditions}
+[절대 금지 사항 및 규칙 - 무조건 준수]
+1. 허용된 스탯은 '경제', '관계', '평판', '건강', '행복' 딱 5가지다.
+2. 너무 평탄하고 행복한 전개만 반복하지 마라! 프로젝트 무임승차, 갑작스런 지출, 가족또는 연인간의 갈등 등 '현실적인 긴장감과 스트레스 요소'를 중간중간 반드시 발생시켜라.
+3. 하지만 파산, 중증 질환, 부모의 소송 등 극단적이고 암울한 막장 드라마 전개는 피하고, '극복 가능한 일상적 시련'으로 수위를 조절하라.
+4. 행복 스탯만은 하락 시 다른 스탯보다 덜 하향되도록 해라.
+5. 숫자(1. 2.)나 기호(-) 없이 대괄호 [ ] 태그만 써라.
 
 [출력 양식]
 ${isTimeSkip ? 
@@ -116,11 +117,7 @@ ${isTimeSkip ?
   ];
 
   try {
-    const resp = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: contents
-    });
-    
+    const resp = await ai.models.generateContent({ model: GEMINI_MODEL, contents });
     const aiText = resp.text || "";
     const deltas = parseStatDeltas(aiText);
 

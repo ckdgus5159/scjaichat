@@ -95,22 +95,22 @@ export default function Home() {
   }
 
   return (
-    <main className="mx-auto max-w-md p-6">
-      <h1 className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">드라마 채팅 프로토타입</h1>
-      <p className="mt-3 text-stone-600 dark:text-zinc-300 leading-relaxed">
-        당신은 주인공의 ‘조언자’입니다. 질문 10개로 가치관을 정하고, AI와 함께 현실 밀착형 서사를 만들어보세요.
+    <main className="mx-auto max-w-md p-6 flex flex-col justify-center min-h-[80vh]">
+      <h1 className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">Drama Chat</h1>
+      <p className="mt-3 text-stone-600 dark:text-zinc-300 leading-relaxed text-sm">
+        당신의 가치관과 선택으로 대학 생활의 희로애락을 경험해보세요. AI와 함께 당신만의 현실 밀착형 캠퍼스 라이프를 만들어갑니다.
       </p>
 
-      <div className="mt-6 rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 p-4 space-y-3 shadow-sm transition-colors">
-        <input className="w-full rounded-xl bg-stone-50 border border-stone-200 text-stone-900 px-3 py-3 outline-none focus:border-emerald-500 dark:bg-white/5 dark:border-white/10 dark:text-zinc-50 transition-colors"
-          placeholder="ID (예: teamA_lch51)" value={handle} onChange={(e) => setHandle(e.target.value)} disabled={busy} autoComplete="off" />
-        <input className="w-full rounded-xl bg-stone-50 border border-stone-200 text-stone-900 px-3 py-3 outline-none focus:border-emerald-500 dark:bg-white/5 dark:border-white/10 dark:text-zinc-50 transition-colors"
+      <div className="mt-8 rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5 p-4 space-y-3 shadow-sm transition-colors">
+        <input className="w-full rounded-xl bg-stone-50 border border-stone-200 text-stone-900 px-3 py-3 outline-none focus:border-emerald-500 dark:bg-black/40 dark:border-white/10 dark:text-zinc-50 transition-colors"
+          placeholder="ID" value={handle} onChange={(e) => setHandle(e.target.value)} disabled={busy} autoComplete="off" />
+        <input className="w-full rounded-xl bg-stone-50 border border-stone-200 text-stone-900 px-3 py-3 outline-none focus:border-emerald-500 dark:bg-black/40 dark:border-white/10 dark:text-zinc-50 transition-colors"
           placeholder="PIN (숫자 4~6자리)" type="password" value={pin} onChange={(e) => setPin(e.target.value.replace(/[^\d]/g, ""))} disabled={busy} />
         <button className="w-full rounded-xl bg-emerald-500 text-white dark:bg-emerald-400 px-4 py-3 dark:text-zinc-950 font-bold disabled:opacity-40 transition-colors"
           onClick={checkOrCreateIdentityThenGo} disabled={busy}>
-          {busy ? "확인 중..." : "ID 확인/등록 후 시작"}
+          {busy ? "확인 중..." : "게임 시작하기"}
         </button>
-        {statusText && <div className="text-xs text-stone-500 dark:text-zinc-400">{statusText}</div>}
+        {statusText && <div className="text-xs text-stone-500 dark:text-zinc-400 text-center">{statusText}</div>}
       </div>
     </main>
   );
