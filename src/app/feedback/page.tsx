@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabaseBrowser } from "@/lib/supabaseClient"; // ✅ Supabase 클라이언트 불러오기
+import { supabaseBrowser } from "@/lib/supabaseClient";
 
 export default function FeedbackPage() {
   const router = useRouter();
@@ -17,14 +17,49 @@ export default function FeedbackPage() {
     setIsSubmitting(true);
 
     try {
-      // ✅ Supabase feedback 테이블에 데이터 삽입
+      // 1. 현재 접속한 아이디(handle) 가져오기
+      const handle = localStorage.getItem("dc_handle") || "알수없음";
+
+      // 2. 해당 아이디의 최신 게임 정보를 불러와 캐릭터 정보 추출
+      let age = "알수없음", major = "알수없음", mbti = "알수없음";
+      
+      const { data: gameData } = await supabaseBrowser
+        .from("games")
+        .select("protagonist")
+        .eq("handle", handle)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (gameData?.protagonist) {
+        const oneLine = gameData.protagonist.oneLine || "";
+        const mbtiMatch = oneLine.match(/\(([A-Z]{4})\)/);
+        if (mbtiMatch) mbti = mbtiMatch[1];
+        
+        const ageMatch = oneLine.match(/(\d+)세/);
+        if (ageMatch) age = ageMatch[1];
+
+        const subInfo = gameData.protagonist.subInfo || "";
+        const majorMatch = subInfo.match(/^(.*?) \d학년/);
+        if (majorMatch) major = majorMatch[1];
+      }
+
+      // 3. 추출된 캐릭터 정보와 함께 피드백 저장
       const { error } = await supabaseBrowser
         .from("feedback")
-        .insert([{ review, feature, phone }]);
+        .insert([{ 
+          review, 
+          feature, 
+          phone, 
+          handle, 
+          age, 
+          major, 
+          mbti 
+        }]);
 
       if (error) throw error;
 
-      alert("소중한 의견 정말 감사합니다!\n보내주신 피드백은 더 나은 서비스를 만드는 데 큰 힘이 됩니다.");
+      alert("소중한 의견 정말 감사합니다!\n보내주신 피드백은 더 나은 서비스를 만드는 데 큰 힘이 됩니다.\n커피 쿠폰 당첨 시 남겨주신 번호로 연락드리겠습니다.");
       router.push("/");
     } catch (error) {
       console.error("피드백 전송 오류:", error);
