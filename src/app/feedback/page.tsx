@@ -17,34 +17,48 @@ export default function FeedbackPage() {
     setIsSubmitting(true);
 
     try {
-      // 1. 현재 접속한 아이디(handle) 가져오기
-      const handle = localStorage.getItem("dc_handle") || "알수없음";
+      // 1. 현재 접속 중인 유저의 세션(user_id) 가져오기
+      const { data: sessionData } = await supabaseBrowser.auth.getSession();
+      const userId = sessionData.session?.user?.id;
 
-      // 2. 해당 아이디의 최신 게임 정보를 불러와 캐릭터 정보 추출
-      let age = "알수없음", major = "알수없음", mbti = "알수없음";
-      
-      const { data: gameData } = await supabaseBrowser
-        .from("games")
-        .select("protagonist")
-        .eq("handle", handle)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      let handle = "알수없음";
+      let age = "알수없음";
+      let major = "알수없음";
+      let mbti = "알수없음";
 
-      if (gameData?.protagonist) {
-        const oneLine = gameData.protagonist.oneLine || "";
-        const mbtiMatch = oneLine.match(/\(([A-Z]{4})\)/);
-        if (mbtiMatch) mbti = mbtiMatch[1];
-        
-        const ageMatch = oneLine.match(/(\d+)세/);
-        if (ageMatch) age = ageMatch[1];
+      if (userId) {
+        // 2. user_id를 기반으로 games 테이블에서 가장 최근 플레이한 게임 정보 가져오기
+        const { data: gameData } = await supabaseBrowser
+          .from("games")
+          .select("handle, protagonist")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-        const subInfo = gameData.protagonist.subInfo || "";
-        const majorMatch = subInfo.match(/^(.*?) \d학년/);
-        if (majorMatch) major = majorMatch[1];
+        if (gameData) {
+          handle = gameData.handle || handle;
+
+          // 3. protagonist 내부의 JSON 데이터에서 나이, MBTI, 학과 추출
+          const proto = gameData.protagonist || {};
+          const oneLine = proto.oneLine || ""; // 예: "21세 남성, 의학과 1학년 (INTJ) 대학생의 이야기."
+          const subInfo = proto.subInfo || "";   // 예: "의학과 1학년"
+
+          // "21세" 에서 숫자 '21' 추출
+          const ageMatch = oneLine.match(/(\d+)세/);
+          if (ageMatch) age = ageMatch[1];
+
+          // "(INTJ)" 에서 알파벳 'INTJ' 추출
+          const mbtiMatch = oneLine.match(/\(([a-zA-Z]{4})\)/);
+          if (mbtiMatch) mbti = mbtiMatch[1];
+
+          // "의학과 1학년" 에서 '의학과' 추출
+          const majorMatch = subInfo.match(/^(.*?) \d학년/);
+          if (majorMatch) major = majorMatch[1];
+        }
       }
 
-      // 3. 추출된 캐릭터 정보와 함께 피드백 저장
+      // 4. 추출된 완벽한 정보들을 피드백과 함께 DB에 저장
       const { error } = await supabaseBrowser
         .from("feedback")
         .insert([{ 
