@@ -83,6 +83,52 @@ export default function PlayPage({ params }: PageProps) {
     })();
   }, [gameId]);
 
+  // ✅ 전송 취소(되돌리기) 함수 추가
+  async function undo() {
+    if (!window.confirm("마지막으로 한 행동을 취소하고 시간을 되돌리시겠습니까?")) return;
+    
+    setSending(true);
+    try {
+      const { data: sessionData } = await supabaseBrowser.auth.getSession();
+      const accessToken = sessionData.session!.access_token;
+      
+      const r = await fetch("/api/chat/undo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ gameId }),
+      });
+      
+      if (!r.ok) {
+        const errData = await r.json().catch(() => ({}));
+        alert(errData.error || "되돌리기에 실패했습니다.");
+        return;
+      }
+      
+      const data = await r.json();
+      
+      // 로컬 화면 상태에서 마지막 대화들 잘라내기
+      let lastUserIdx = -1;
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === "user") {
+          lastUserIdx = i;
+          break;
+        }
+      }
+      
+      if (lastUserIdx !== -1) {
+        setMessages(prev => prev.slice(0, lastUserIdx));
+      }
+      
+      setStats(data.stats);
+      setHappiness(data.stats.happiness);
+      setStatus("active");
+    } catch (e) {
+      alert("되돌리기 중 오류가 발생했습니다.");
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function send() {
     const text = input.trim();
     if (!text || sending || status === "finished") return;
@@ -92,7 +138,6 @@ export default function PlayPage({ params }: PageProps) {
       const { data: sessionData } = await supabaseBrowser.auth.getSession();
       const accessToken = sessionData.session!.access_token;
       
-      // AI 응답 요청
       const r = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
@@ -105,9 +150,8 @@ export default function PlayPage({ params }: PageProps) {
       if (data.stats) setStats(prev => mergeStats(prev, data.stats));
       
       const latestStats = { ...mergeStats({} as any, data.stats), happiness: clamp01to100(data.happiness) };
-      setMessages(prev => [...prev, { role: "assistant", content: data.assistantText || "오류", stats: latestStats }]);
+      setMessages(prev => [...prev, { role: "assistant", content: data.assistantText || "오류가 발생했습니다. 하단의 ↩️ 버튼을 눌러 되돌리기를 시도해주세요.", stats: latestStats }]);
 
-      // 8턴 피드백 팝업
       const userTurns = messages.filter(m => m.role === "user").length + 1;
       const hasSeenPopup = localStorage.getItem(`feedback_shown_${gameId}`);
       if (userTurns === 8 && !hasSeenPopup) {
@@ -115,7 +159,7 @@ export default function PlayPage({ params }: PageProps) {
         localStorage.setItem(`feedback_shown_${gameId}`, "true");
       }
     } catch {
-      setMessages(prev => [...prev, { role: "assistant", content: "서버 응답 오류" }]);
+      setMessages(prev => [...prev, { role: "assistant", content: "서버 응답 오류가 발생했습니다. 하단의 ↩️ 버튼을 눌러 되돌리기를 시도해주세요." }]);
     } finally {
       setSending(false);
     }
@@ -138,6 +182,8 @@ export default function PlayPage({ params }: PageProps) {
   };
 
   let turnCount = 0;
+  // 유저가 한 번이라도 채팅을 쳤는지 확인 (되돌리기 버튼 활성화 여부 결정)
+  const hasUserMessage = messages.some(m => m.role === "user");
 
   return (
     <main className="mx-auto max-w-md p-4 pb-32 min-h-screen flex flex-col relative">
@@ -148,7 +194,7 @@ export default function PlayPage({ params }: PageProps) {
             <h3 className="text-xl font-bold text-emerald-600 dark:text-emerald-400">잠깐! 피드백을 남겨주세요 🎁</h3>
             <p className="text-sm text-stone-600 dark:text-zinc-300 leading-relaxed">
               플레이는 재미있으신가요? 더 나은 경험을 위해 여러분의 의견이 필요합니다.<br/>
-              정성스러운 피드백을 주신 <strong>10분께 커피 쿠폰</strong>을 드립니다! **진행내역 저장됨**
+              정성스러운 피드백을 주신 <strong>10분께 커피 쿠폰</strong>을 드립니다!
             </p>
             <div className="flex gap-2 pt-2">
               <button onClick={() => setShowFeedbackPopup(false)} className="flex-1 py-3 rounded-xl bg-stone-100 text-stone-600 font-bold dark:bg-white/10 dark:text-zinc-300 hover:bg-stone-200 transition-colors">나중에요</button>
@@ -158,7 +204,6 @@ export default function PlayPage({ params }: PageProps) {
         </div>
       )}
 
-      {/* ✅ 고정 문구 적용 및 불필요한 변수 삭제 */}
       <div className="sticky top-[52px] z-30 bg-stone-50/95 dark:bg-zinc-950/95 backdrop-blur border-b border-stone-200 dark:border-white/5 p-3 rounded-xl mb-4 shadow-sm transition-colors pt-2">
         <div className="text-[11px] text-stone-600 dark:text-emerald-300/80 text-center mb-3 font-medium tracking-wide">
           당신은 어떤 인생을 살고싶으신가요?
@@ -218,11 +263,22 @@ export default function PlayPage({ params }: PageProps) {
 
       <div className="fixed bottom-0 left-0 right-0 bg-stone-50/95 dark:bg-zinc-950/95 backdrop-blur border-t border-stone-200 dark:border-white/10 transition-colors z-40">
         <div className="mx-auto max-w-md p-3 flex gap-2">
-          {/* ✅ 불필요한 치트키 힌트 문구 제거 */}
+          
+          {/* ✅ 되돌리기 버튼 추가 */}
+          <button
+            onClick={undo}
+            disabled={sending || status === "finished" || !hasUserMessage}
+            className="rounded-xl bg-stone-200 text-stone-700 dark:bg-white/10 dark:text-zinc-300 px-4 py-3 font-bold disabled:opacity-30 transition-colors flex items-center justify-center text-lg shadow-sm"
+            title="마지막 행동 취소"
+          >
+            ↩️
+          </button>
+
           <input className="flex-1 rounded-xl bg-white border border-stone-200 text-stone-900 px-4 py-3 outline-none focus:border-emerald-500 dark:bg-white/5 dark:border-white/10 dark:text-zinc-50"
             placeholder={status === "finished" ? "엔딩을 준비 중입니다..." : "행동 입력"}
             value={input} onChange={(e) => setInput(e.target.value)} disabled={sending || status === "finished"} 
             onKeyDown={(e) => { if (e.key === "Enter") send(); }} />
+          
           <button className="rounded-xl bg-emerald-500 text-white dark:bg-emerald-400 px-5 py-3 dark:text-zinc-950 font-bold disabled:opacity-40"
             onClick={send} disabled={sending || status === "finished" || !input.trim()}>전송</button>
         </div>
