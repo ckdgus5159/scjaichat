@@ -14,6 +14,11 @@ export type ValuesProfile = {
   weights: Record<ValueKey, number>;
   topValues: ValueKey[];
   summaryKo: string;
+  animal: {
+    icon: string;
+    name: string;
+    desc: string;
+  };
 };
 
 export type Choice = {

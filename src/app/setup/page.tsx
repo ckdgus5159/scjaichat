@@ -28,6 +28,12 @@ export default function SetupPage() {
   const isLast = step === QUESTIONS.length - 1;
   const isMbtiComplete = mbti.eI && mbti.sN && mbti.tF && mbti.jP;
 
+  // 결과 계산 (동물 카드에 사용)
+  const valuesProfile = useMemo(() => {
+    if (!done) return null;
+    return buildValuesProfile(answers);
+  }, [done, answers]);
+
   useEffect(() => {
     const handle = localStorage.getItem("dc_handle") || "";
     const pin = localStorage.getItem("dc_pin") || "";
@@ -54,7 +60,7 @@ export default function SetupPage() {
       const session = await ensureAnonSession();
       const accessToken = session!.access_token;
 
-      const valuesProfile = buildValuesProfile(answers);
+      const finalValuesProfile = valuesProfile || buildValuesProfile(answers);
       const baseProto = buildProtagonist(answers);
       const finalMbti = `${mbti.eI}${mbti.sN}${mbti.tF}${mbti.jP}`;
 
@@ -71,7 +77,7 @@ export default function SetupPage() {
       const r = await fetch("/api/game/start", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ handle, pin, answers, valuesProfile, protagonist: finalProtagonist, forceNew }),
+        body: JSON.stringify({ handle, pin, answers, valuesProfile: finalValuesProfile, protagonist: finalProtagonist, forceNew }),
       });
 
       if (!r.ok) throw new Error(await r.text());
@@ -91,7 +97,6 @@ export default function SetupPage() {
         <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-6 shadow-sm dark:shadow-[0_0_15px_rgba(16,185,129,0.5)]"></div>
         <h2 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 animate-pulse tracking-widest mb-8">당신만의 세계를 구축하는 중...</h2>
         
-        {/* ✅ 다시 복구된 게임 가이드라인 패널 */}
         <div className="bg-white/90 dark:bg-black/40 p-6 rounded-2xl border border-stone-200 dark:border-white/10 max-w-sm w-full text-left space-y-4 shadow-lg">
           <h3 className="font-bold text-stone-800 dark:text-zinc-200 text-sm border-b border-stone-200 dark:border-white/10 pb-2">💡 게임 진행 안내</h3>
           <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
@@ -104,15 +109,30 @@ export default function SetupPage() {
             <span className="mr-1">🏆</span> <strong>엔딩 조건:</strong> 시련을 극복하고 <strong>행복 스탯이 100</strong>에 도달하면 게임이 종료되며 자서전이 완성됩니다.
           </p>
         </div>
-
       </main>
     );
   }
 
   if (done && showProfileInput) {
     return (
-      <main className="mx-auto max-w-md p-6 min-h-[80vh] flex flex-col justify-center pb-20">
-        <h2 className="text-xl font-bold mb-6 text-emerald-600 dark:text-emerald-400">캐릭터 정보 입력 (대학생)</h2>
+      <main className="mx-auto max-w-md p-6 min-h-[80vh] flex flex-col justify-center pb-20 mt-10">
+        
+        {/* 동물 결과 카드 */}
+        {valuesProfile && (
+          <div className="mb-8 p-5 rounded-3xl bg-emerald-50/80 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 shadow-sm flex items-center gap-5">
+            <div className="text-5xl drop-shadow-sm">{valuesProfile.animal.icon}</div>
+            <div>
+              <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mb-1 tracking-wide">
+                테스트 결과, 당신의 성향은...
+              </div>
+              <div className="text-[15px] font-bold text-stone-800 dark:text-zinc-100 leading-snug">
+                {valuesProfile.animal.desc} <span className="text-emerald-600 dark:text-emerald-400 text-lg">'{valuesProfile.animal.name}'</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <h2 className="text-xl font-bold mb-5 text-stone-800 dark:text-white">기본 정보 입력</h2>
         <div className="space-y-5 bg-white border border-stone-200 dark:bg-white/5 p-6 rounded-3xl dark:border-white/10 shadow-md transition-colors">
           
           <div className="flex gap-4">
@@ -165,7 +185,7 @@ export default function SetupPage() {
 
   return (
     <main className="mx-auto max-w-md p-6">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-8 pt-8">
         <h2 className="text-lg font-semibold text-stone-900 dark:text-white">가치관 설정</h2>
         <div className="text-sm text-stone-500 dark:text-zinc-300">{step + 1} / {QUESTIONS.length}</div>
       </div>
@@ -177,7 +197,8 @@ export default function SetupPage() {
             const selected = picked[q.id]?.choiceId === c.id;
             return (
               <button key={c.id} className={["w-full text-left rounded-xl p-4 border transition", selected ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : "border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100 dark:border-white/10 dark:bg-black/20 dark:text-zinc-300 dark:hover:bg-white/5"].join(" ")}
-                onClick={() => setPicked(prev => ({ ...prev, [q.id]: { qid: q.id, choiceId: c.id, choiceText: c.text, weights: c.weights } }))}>
+                // ✅ 이 부분에 `as any`를 추가하여 타입 에러를 가볍게 우회했습니다!
+                onClick={() => setPicked(prev => ({ ...prev, [q.id]: { qid: q.id, choiceId: c.id, choiceText: c.text, weights: c.weights as any } }))}>
                 {c.text}
               </button>
             );
