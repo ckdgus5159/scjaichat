@@ -15,15 +15,15 @@ const VALUE_KO: Record<ValueKey, string> = {
 
 // 성향 1순위에 따른 동물 매핑
 const ANIMAL_MAP: Record<ValueKey, { icon: string; name: string; desc: string }> = {
-  perfection: { icon: "🦉", name: "올빼미", desc: "원칙을 지키며 완벽을 추구하는 지혜로운" },
+  perfection: { icon: "🐮", name: "소", desc: "원칙을 지키며 완벽을 추구하는 지혜로운" },
   helpfulness: { icon: "🐶", name: "리트리버", desc: "타인을 돕고 배려심이 깊은 다정한" },
   achievement: { icon: "🦅", name: "독수리", desc: "높은 목표를 향해 거침없이 비상하는" },
   uniqueness: { icon: "🐈", name: "고양이", desc: "자신만의 색깔과 개성이 뚜렷한 매력적인" },
-  knowledge: { icon: "🦊", name: "여우", desc: "세상을 깊이 관찰하고 탐구하는 예리한" },
+  knowledge: { icon: "🦉", name: "올빼미", desc: "세상을 깊이 관찰하고 탐구하는 예리한" },
   security: { icon: "🦌", name: "사슴", desc: "신중하고 책임감 있게 무리를 지키는 충실한" },
-  enjoyment: { icon: "🐬", name: "돌고래", desc: "틀에 얽매이지 않고 호기심 가득한 자유로운" },
+  enjoyment: { icon: "🐵", name: "원숭이", desc: "틀에 얽매이지 않고 호기심 가득한 자유로운" },
   power: { icon: "🦁", name: "사자", desc: "두려움 없이 도전하며 상황을 주도하는 당당한" },
-  peace: { icon: "🐼", name: "판다", desc: "어떤 상황에서도 평온하게 조화를 이루는" },
+  peace: { icon: "🐘", name: "코끼리", desc: "어떤 상황에서도 평온하게 조화를 이루는" },
 };
 
 export const QUESTIONS = [
